@@ -12,6 +12,7 @@ from telegram.ext import ContextTypes
 
 from gcp_util.secrets import get_telegram_user_id
 from memes.generator import generate_meme
+from memes.trmnl import push_image
 
 logger = logging.getLogger(__name__)
 
@@ -100,5 +101,12 @@ async def send_daily_hn_meme(context: ContextTypes.DEFAULT_TYPE) -> None:
             photo=io.BytesIO(img_bytes),
             caption=caption,
         )
+
+        # The e-ink panel is a bonus surface, not the point of the job: a failed
+        # push must not look like a failed meme.
+        try:
+            push_image(img_bytes)
+        except Exception:
+            logger.exception("Failed to push daily HN meme to TRMNL")
     except Exception:
         logger.exception("Failed to send daily HN meme")

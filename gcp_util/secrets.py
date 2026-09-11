@@ -149,3 +149,10 @@ def get_openrouter_api_key() -> str:
     return get_gcp_secret(secret)
 
 
+@lru_cache(maxsize=1)
+def get_trmnl_meme_webhook_url() -> str:
+    """Image-webhook URL for the TRMNL panel's daily-meme plugin.
+
+    Treated as a credential: holding the URL is enough to write to the panel.
+    """
+    return _bot_key("TRMNL_MEME_WEBHOOK_URL")
