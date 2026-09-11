@@ -4,6 +4,40 @@ Decisions and milestones for this repo, newest first. One `### entry` per decisi
 milestone under a `## YYYY-MM-DD` date header — capture the *why*, not just the *what*.
 Maintained via the `/devlog` skill. (Format mirrors `SignalAgents/RESEARCH_LOG.md`.)
 
+## 2026-09-11
+
+### Daily meme lands on the TRMNL e-ink panel (push, not poll)
+
+Bought a TRMNL — an 800x480 1-bit e-ink display — and the daily HN meme was the
+obvious first thing to put on it. `send_daily_hn_meme` now POSTs the same PNG it
+sends to Telegram at TRMNL's Image Webhook plugin, inside its own try/except: the
+panel is a bonus surface, and a failed push must not read as a failed meme.
+
+**Why push and not a polling plugin.** TRMNL's other private-plugin strategies
+have *them* fetch a URL from *us*, which would mean exposing an endpoint. The
+natural host would be the triage FastAPI backend, but it sits behind Cloudflare
+Access, which TRMNL's poller can't authenticate against without a service token
+and a bypass policy — and it would make the home server's uptime a dependency of
+a screen on the wall. A webhook push from the job that already runs adds no
+inbound surface at all. (A polling plugin over a public GCS object, tapestry
+style, stays the right shape for anything the *website* computes; this isn't
+that.)
+
+**Why we dither locally.** The image webhook is passthrough storage — no
+server-side fitting or dithering — so `memes/trmnl.py` does the whole conversion:
+greyscale, autocontrast, contain-fit onto a white 800x480 canvas, then PIL's
+Floyd-Steinberg. Autocontrast is the non-obvious part: e-ink has no midtones to
+spend, and without stretching the range first a dithered photo turns into uniform
+grey noise. Letterboxed rather than cropped, because the panel is much wider than
+a meme template and a crop usually eats the punchline. A real render comes out
+~40KB, far inside the 5MB / 12-uploads-an-hour limits.
+
+The webhook URL is the only credential TRMNL has, so it lives in Secret Manager
+as `TRMNL_MEME_WEBHOOK_URL` alongside the bot tokens; `TRMNL_MEME_WEBHOOK_URL` in
+the environment overrides it, for pointing a local run at a throwaway plugin.
+Files: `memes/trmnl.py` (new, plus a `python -m memes.trmnl --preview` CLI),
+`memes/daily_hn_meme.py`, `gcp_util/secrets.py`, `tests/memes/test_trmnl.py`.
+
 ## 2026-06-08
 
 ### Triage decision + status cleanup (collapse keep-decisions, split auto_rejected)
