@@ -173,5 +173,3 @@ def get_openrouter_api_key() -> str:
         project_id="personal-website-318015", secret_id="OPENROUTER_KEY", version=1
     )
     return get_gcp_secret(secret)
-
-

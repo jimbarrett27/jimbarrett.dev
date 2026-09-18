@@ -4,6 +4,90 @@ Decisions and milestones for this repo, newest first. One `### entry` per decisi
 milestone under a `## YYYY-MM-DD` date header — capture the *why*, not just the *what*.
 Maintained via the `/devlog` skill. (Format mirrors `SignalAgents/RESEARCH_LOG.md`.)
 
+## 2026-09-18
+
+### Fitness panel on TRMNL, and the meme panel rebuilt on the data webhook
+
+Added a second TRMNL panel — CTL/ATL/form from intervals.icu, pushed at 09:00 and
+21:00 — and in doing so rebuilt the meme panel from the 11th on a different
+strategy. Both now go through `util/trmnl.py`, and both have their layout in a
+Liquid template that TRMNL renders.
+
+**Why the meme panel changed strategy.** The image webhook is passthrough: we
+hand over a finished PNG, so everything on the panel has to be baked into it. The
+fitness panel wanted live text — big numerals, a headline — rendered at native
+resolution rather than dithered along with a photograph, which means TRMNL's own
+renderer, which means the *data* webhook. Once the meme panel followed, it could
+carry the source HN headline as real text beside the picture, which is what earns
+back the white space a square meme leaves on a 5:3 screen.
+
+**The cost, and it is the one the 11th leaned away from.** A data webhook carries
+2KB, so the picture can no longer travel with the payload: it is dithered, pushed
+to a public-read GCS object (`personal-website-318015-trmnl`, dated names to
+defeat caching), and only its URL is sent. That is the public-object shape the
+11th's entry set aside as "the right shape for anything the *website* computes;
+this isn't that". Reintroducing it buys live text and adaptive layout; it costs a
+publicly readable meme a day. Worth it here, but it *is* the trade that was
+previously declined, not a free upgrade.
+
+**Layout follows aspect ratio.** Five of the six meme templates are wide. Fitting
+those beside a headline column scaled them to ~56%, and since a meme's caption is
+burned into the picture, the caption became unreadable. Wide memes now fill the
+panel with a one-line footer; square ones keep the column. Everything lands at
+84-97%, with a test holding the floor at 80%.
+
+**Two things only a render would have told us.** The fitness panel's y-axis was
+inherited pinned at 100 from its design mockup, which draws a CTL in the teens as
+a flat line along the floor — it is chosen from the data now. And TRMNL rejects
+bit-depth-1 PNGs with "Unsupported image format" despite listing PNG as
+supported, so the dither is stored at 8 bits: identical pixels, bigger file.
+
+**How the old plugin died.** The 11th's image plugin was deleted during this work
+on the assumption it was a stale leftover — the meme panel had landed on `main`
+while the branch in hand predated it, so a grep found nothing and `main` was
+never checked. Both earlier `TRMNL_MEME_WEBHOOK_URL` versions now 404. Nothing
+was lost beyond the plugin itself, but the lesson is cheap: check `main`, not the
+working branch, before concluding a feature does not exist.
+
+Files: `fitness/` (new), `memes/eink.py`, `memes/storage.py`, `memes/trmnl.py`
+(rewritten), `util/trmnl.py`, `util/panel_preview.py`, `main.py`. The meme job
+also moves from weekdays to daily, since a weekday-only job left Friday's meme on
+the wall all weekend.
+
+## 2026-09-11
+
+### Daily meme lands on the TRMNL e-ink panel (push, not poll)
+
+Bought a TRMNL — an 800x480 1-bit e-ink display — and the daily HN meme was the
+obvious first thing to put on it. `send_daily_hn_meme` now POSTs the same PNG it
+sends to Telegram at TRMNL's Image Webhook plugin, inside its own try/except: the
+panel is a bonus surface, and a failed push must not read as a failed meme.
+
+**Why push and not a polling plugin.** TRMNL's other private-plugin strategies
+have *them* fetch a URL from *us*, which would mean exposing an endpoint. The
+natural host would be the triage FastAPI backend, but it sits behind Cloudflare
+Access, which TRMNL's poller can't authenticate against without a service token
+and a bypass policy — and it would make the home server's uptime a dependency of
+a screen on the wall. A webhook push from the job that already runs adds no
+inbound surface at all. (A polling plugin over a public GCS object, tapestry
+style, stays the right shape for anything the *website* computes; this isn't
+that.)
+
+**Why we dither locally.** The image webhook is passthrough storage — no
+server-side fitting or dithering — so `memes/trmnl.py` does the whole conversion:
+greyscale, autocontrast, contain-fit onto a white 800x480 canvas, then PIL's
+Floyd-Steinberg. Autocontrast is the non-obvious part: e-ink has no midtones to
+spend, and without stretching the range first a dithered photo turns into uniform
+grey noise. Letterboxed rather than cropped, because the panel is much wider than
+a meme template and a crop usually eats the punchline. A real render comes out
+~40KB, far inside the 5MB / 12-uploads-an-hour limits.
+
+The webhook URL is the only credential TRMNL has, so it lives in Secret Manager
+as `TRMNL_MEME_WEBHOOK_URL` alongside the bot tokens; `TRMNL_MEME_WEBHOOK_URL` in
+the environment overrides it, for pointing a local run at a throwaway plugin.
+Files: `memes/trmnl.py` (new, plus a `python -m memes.trmnl --preview` CLI),
+`memes/daily_hn_meme.py`, `gcp_util/secrets.py`, `tests/memes/test_trmnl.py`.
+
 ## 2026-06-08
 
 ### Triage decision + status cleanup (collapse keep-decisions, split auto_rejected)
