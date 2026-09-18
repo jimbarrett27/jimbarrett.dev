@@ -29,11 +29,6 @@ from util.timezone import stockholm_time, stockholm_now
 
 logger = setup_logger(__name__)
 
-# Days for run_daily jobs that should skip weekends. PTB maps 0-6 to
-# sunday-saturday, so Monday-Friday is (1, 2, 3, 4, 5).
-WEEKDAYS = (1, 2, 3, 4, 5)
-
-
 def is_weekend() -> bool:
     """True if it's currently Saturday or Sunday in Stockholm."""
     # datetime.weekday(): Monday=0 ... Saturday=5, Sunday=6.
@@ -186,7 +181,9 @@ def build_photos_app() -> Application:
 def build_memes_app() -> Application:
     app = Application.builder().token(get_memes_bot_key()).build()
     if app.job_queue:
-        app.job_queue.run_daily(send_daily_hn_meme, time=stockholm_time(9, 45), days=WEEKDAYS)
+        # Every day, not just weekdays: the meme also feeds the TRMNL panel, and
+        # a weekday-only job left Friday's meme on the wall all weekend.
+        app.job_queue.run_daily(send_daily_hn_meme, time=stockholm_time(9, 45))
     else:
         logger.warning("JobQueue not available - daily meme disabled.")
     return app

@@ -141,6 +141,16 @@ def get_telegram_secret_token() -> str:
 
 
 @lru_cache(maxsize=1)
+def get_trmnl_meme_webhook_url() -> str:
+    """Webhook for the daily-meme TRMNL private plugin.
+
+    As with the fitness plugin, the UUID in the URL is the only credential TRMNL
+    checks, so the whole URL is a secret rather than a config value.
+    """
+    return _bot_key("TRMNL_MEME_WEBHOOK_URL")
+
+
+@lru_cache(maxsize=1)
 def get_trmnl_fitness_webhook_url() -> str:
     """Webhook for the fitness TRMNL private plugin.
 
