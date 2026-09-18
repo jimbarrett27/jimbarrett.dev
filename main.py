@@ -22,6 +22,7 @@ from minecraft.react_to_logs import react_to_logs as react_to_minecraft_logs
 from minecraft.healthcheck import run_healthcheck, run_on_demand_check, run_daily_summary
 from content_screening.scanner import run_full_scan, format_scan_summary
 from tapestry.daily import daily_tapestry_task
+from fitness.daily import fitness_panel_task
 from telegram_bot.telegram_bot import TelegramBot
 from util.logging_util import setup_logger, log_telegram_message_received
 from util.timezone import stockholm_time, stockholm_now
@@ -215,6 +216,12 @@ def build_minecraft_app() -> Application:
         # an unattended-upgrade killing the bot mid-generation) doesn't skip the
         # day. generate_next_panel is idempotent — a no-op if today already exists.
         app.job_queue.run_once(daily_tapestry_task, when=60)
+        # TRMNL fitness panel → pushed twice daily. Both times track when the
+        # data actually lands rather than when the screen redraws: the watch
+        # doesn't sync until Jim is up and about, so 09:00 for the overnight
+        # CTL/ATL, and training is usually after work, so 21:00 to catch it.
+        app.job_queue.run_daily(fitness_panel_task, time=stockholm_time(9, 0))
+        app.job_queue.run_daily(fitness_panel_task, time=stockholm_time(21, 0))
     else:
         logger.warning("JobQueue not available - daily paper scan disabled.")
 

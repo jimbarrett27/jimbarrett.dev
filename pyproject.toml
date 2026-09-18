@@ -30,6 +30,9 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "hypothesis>=6.100.0",
+    # Preview-only: TRMNL renders the Liquid itself in production, so this is
+    # never imported by the bot -- only by fitness.preview.
+    "python-liquid>=2.0.0",
 ]
 
 [dependency-groups]
