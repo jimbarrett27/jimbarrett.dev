@@ -1,118 +1,85 @@
-"""Push memes to the TRMNL e-ink display via its Image Webhook plugin.
+"""Push the daily meme to its TRMNL private plugin.
 
-TRMNL's image webhook is passthrough storage: whatever PNG we POST is what the
-panel shows, with no server-side fitting or dithering. The panel is a 1-bit
-800x480 e-ink screen, so we do that conversion ourselves — a meme handed over as
-a full-colour JPEG comes out muddy, and text loses its edges.
+Push one manually (generates a fresh meme, so it costs an LLM call)::
 
-The webhook URL *is* the credential (anyone holding it can write to the panel),
-so it lives in Secret Manager alongside the bot tokens. ``TRMNL_MEME_WEBHOOK_URL``
-in the environment overrides it, which is how you point a local run at a throwaway
-plugin without touching the secret.
+    uv run python -m memes.trmnl
+
+The image cannot travel in the webhook -- 2KB of JSON against a few hundred KB of
+pixels -- so the flow is: dither it (:mod:`memes.eink`), upload it
+(:mod:`memes.storage`), then send the resulting URL here for TRMNL's renderer to
+fetch. The markup lives in ``memes/templates_trmnl/meme_full.liquid``.
+
+Pushing is best-effort by design. The Telegram meme is the thing that must not
+break, so callers should treat a failure here as a stale panel, not a failed day.
 """
 
-import io
+import argparse
 import logging
-import os
-
-import requests
-from PIL import Image, ImageOps
+from datetime import date
 
 from gcp_util.secrets import get_trmnl_meme_webhook_url
+from memes import eink, storage
+from util import trmnl
 
 logger = logging.getLogger(__name__)
 
-# TRMNL OG panel geometry.
-PANEL_WIDTH = 800
-PANEL_HEIGHT = 480
-
-WEBHOOK_URL_ENV = "TRMNL_MEME_WEBHOOK_URL"
-
-# The panel is far wider than a typical meme template, so images are letterboxed
-# rather than cropped — a cropped meme usually loses half its punchline.
-BACKGROUND = 255  # white, which is the e-ink panel's rest state
+# The headline is the only free text on the panel and the column is narrow, so
+# cap it rather than let a long title push the footer off the screen.
+MAX_HEADLINE_CHARS = 110
 
 
-def prepare_for_panel(
-    image_bytes: bytes,
-    width: int = PANEL_WIDTH,
-    height: int = PANEL_HEIGHT,
-) -> bytes:
-    """Fit an arbitrary meme into a 1-bit PNG the panel can render as-is.
+def _headline(story: dict | None) -> str:
+    if not story:
+        return "Today's front page"
+    title = story.get("title", "")
+    if len(title) > MAX_HEADLINE_CHARS:
+        return title[: MAX_HEADLINE_CHARS - 1].rstrip() + "…"
+    return title
 
-    Greyscale -> autocontrast -> contain-fit onto a white canvas -> Floyd-Steinberg
-    dither. Autocontrast matters more than it looks: e-ink has no midtones to
-    spend, so stretching the range first keeps dithered photos from turning into
-    uniform grey noise.
+
+def push_meme(image_bytes: bytes, story: dict | None = None, day: date | None = None) -> bool:
+    """Dither, upload and push the meme. Returns whether TRMNL accepted it."""
+    prepared = eink.prepare(image_bytes)
+    url = storage.upload_meme(prepared.png, day=day)
+    return trmnl.push(get_trmnl_meme_webhook_url(), {
+        "meme_url": url,
+        "meme_width": prepared.width,
+        "meme_height": prepared.height,
+        "layout": prepared.layout,
+        "headline": _headline(story),
+        "day": (day or date.today()).isoformat(),
+        "points": (story or {}).get("points") or "",
+        "comments": (story or {}).get("comments") or "",
+    })
+
+
+def push_todays_meme() -> bool:
+    """Generate a meme from today's front page and push it. Costs an LLM call.
+
+    The scheduled job pushes the same image it sends to Telegram, so the two
+    always agree. Running this by hand makes a *new* meme, which will therefore
+    differ from whatever Telegram received today.
     """
-    with Image.open(io.BytesIO(image_bytes)) as img:
-        grey = ImageOps.autocontrast(img.convert("L"))
-
-        scale = min(width / grey.width, height / grey.height)
-        fitted = grey.resize(
-            (max(1, round(grey.width * scale)), max(1, round(grey.height * scale))),
-            Image.LANCZOS,
-        )
-
-        canvas = Image.new("L", (width, height), BACKGROUND)
-        canvas.paste(
-            fitted,
-            ((width - fitted.width) // 2, (height - fitted.height) // 2),
-        )
-
-        buffer = io.BytesIO()
-        # PIL's default convert("1") dither is Floyd-Steinberg.
-        canvas.convert("1").save(buffer, format="PNG", optimize=True)
-        return buffer.getvalue()
-
-
-def _webhook_url() -> str:
-    return os.environ.get(WEBHOOK_URL_ENV) or get_trmnl_meme_webhook_url()
-
-
-def push_image(image_bytes: bytes, timeout: int = 30) -> None:
-    """Prepare `image_bytes` for the panel and POST it to the image webhook.
-
-    Raises on a failed upload; callers that treat the panel as a nice-to-have
-    should catch. TRMNL allows 12 uploads an hour and rejects anything over 5MB,
-    neither of which a once-daily 1-bit PNG comes close to.
-    """
-    panel_png = prepare_for_panel(image_bytes)
-    response = requests.post(
-        _webhook_url(),
-        data=panel_png,
-        headers={"Content-Type": "image/png"},
-        timeout=timeout,
+    from memes.daily_hn_meme import (
+        build_meme_prompt, fetch_hn_stories, get_excluded_templates, pick_story,
+        record_template_use,
     )
-    if not response.ok:
-        # TRMNL explains itself in the body — a 422 is usually the webhook URL of
-        # a *data* private plugin ("must be nested inside a merge_variables
-        # payload"), which looks identical to an image one from the outside.
-        raise requests.HTTPError(
-            f"TRMNL rejected the image ({response.status_code}): {response.text[:500]}",
-            response=response,
-        )
-    logger.info("Pushed %d bytes to the TRMNL panel", len(panel_png))
+    from memes.generator import generate_meme
+
+    stories = fetch_hn_stories()
+    image_bytes, template, agent_text = generate_meme(
+        build_meme_prompt(stories), exclude_templates=get_excluded_templates(),
+    )
+    record_template_use(template)
+    logger.info("generated meme from template %s", template)
+    return push_meme(image_bytes, pick_story(stories, agent_text))
+
+
+def main() -> int:
+    argparse.ArgumentParser(description="Push a fresh daily meme to TRMNL.").parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    return 0 if push_todays_meme() else 1
 
 
 if __name__ == "__main__":
-    import argparse
-    import sys
-
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("image", help="path to an image to send to the panel")
-    parser.add_argument(
-        "--preview",
-        metavar="OUT.PNG",
-        help="write the panel-ready PNG here instead of pushing it",
-    )
-    args = parser.parse_args()
-
-    source = open(args.image, "rb").read()
-    if args.preview:
-        with open(args.preview, "wb") as handle:
-            handle.write(prepare_for_panel(source))
-        print(f"wrote {args.preview}", file=sys.stderr)
-    else:
-        push_image(source)
-        print("pushed to TRMNL", file=sys.stderr)
+    raise SystemExit(main())

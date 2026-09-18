@@ -4,6 +4,56 @@ Decisions and milestones for this repo, newest first. One `### entry` per decisi
 milestone under a `## YYYY-MM-DD` date header — capture the *why*, not just the *what*.
 Maintained via the `/devlog` skill. (Format mirrors `SignalAgents/RESEARCH_LOG.md`.)
 
+## 2026-09-18
+
+### Fitness panel on TRMNL, and the meme panel rebuilt on the data webhook
+
+Added a second TRMNL panel — CTL/ATL/form from intervals.icu, pushed at 09:00 and
+21:00 — and in doing so rebuilt the meme panel from the 11th on a different
+strategy. Both now go through `util/trmnl.py`, and both have their layout in a
+Liquid template that TRMNL renders.
+
+**Why the meme panel changed strategy.** The image webhook is passthrough: we
+hand over a finished PNG, so everything on the panel has to be baked into it. The
+fitness panel wanted live text — big numerals, a headline — rendered at native
+resolution rather than dithered along with a photograph, which means TRMNL's own
+renderer, which means the *data* webhook. Once the meme panel followed, it could
+carry the source HN headline as real text beside the picture, which is what earns
+back the white space a square meme leaves on a 5:3 screen.
+
+**The cost, and it is the one the 11th leaned away from.** A data webhook carries
+2KB, so the picture can no longer travel with the payload: it is dithered, pushed
+to a public-read GCS object (`personal-website-318015-trmnl`, dated names to
+defeat caching), and only its URL is sent. That is the public-object shape the
+11th's entry set aside as "the right shape for anything the *website* computes;
+this isn't that". Reintroducing it buys live text and adaptive layout; it costs a
+publicly readable meme a day. Worth it here, but it *is* the trade that was
+previously declined, not a free upgrade.
+
+**Layout follows aspect ratio.** Five of the six meme templates are wide. Fitting
+those beside a headline column scaled them to ~56%, and since a meme's caption is
+burned into the picture, the caption became unreadable. Wide memes now fill the
+panel with a one-line footer; square ones keep the column. Everything lands at
+84-97%, with a test holding the floor at 80%.
+
+**Two things only a render would have told us.** The fitness panel's y-axis was
+inherited pinned at 100 from its design mockup, which draws a CTL in the teens as
+a flat line along the floor — it is chosen from the data now. And TRMNL rejects
+bit-depth-1 PNGs with "Unsupported image format" despite listing PNG as
+supported, so the dither is stored at 8 bits: identical pixels, bigger file.
+
+**How the old plugin died.** The 11th's image plugin was deleted during this work
+on the assumption it was a stale leftover — the meme panel had landed on `main`
+while the branch in hand predated it, so a grep found nothing and `main` was
+never checked. Both earlier `TRMNL_MEME_WEBHOOK_URL` versions now 404. Nothing
+was lost beyond the plugin itself, but the lesson is cheap: check `main`, not the
+working branch, before concluding a feature does not exist.
+
+Files: `fitness/` (new), `memes/eink.py`, `memes/storage.py`, `memes/trmnl.py`
+(rewritten), `util/trmnl.py`, `util/panel_preview.py`, `main.py`. The meme job
+also moves from weekdays to daily, since a weekday-only job left Friday's meme on
+the wall all weekend.
+
 ## 2026-09-11
 
 ### Daily meme lands on the TRMNL e-ink panel (push, not poll)

@@ -141,18 +141,35 @@ def get_telegram_secret_token() -> str:
 
 
 @lru_cache(maxsize=1)
+def get_trmnl_meme_webhook_url() -> str:
+    """Webhook for the daily-meme TRMNL private plugin.
+
+    As with the fitness plugin, the UUID in the URL is the only credential TRMNL
+    checks, so the whole URL is a secret rather than a config value.
+    """
+    return _bot_key("TRMNL_MEME_WEBHOOK_URL")
+
+
+@lru_cache(maxsize=1)
+def get_trmnl_fitness_webhook_url() -> str:
+    """Webhook for the fitness TRMNL private plugin.
+
+    The UUID in the URL is the only credential TRMNL checks, so treat the whole
+    URL as a secret rather than a config value.
+    """
+    return _bot_key("TRMNL_FITNESS_WEBHOOK_URL")
+
+
+@lru_cache(maxsize=1)
+def get_intervals_api_key() -> str:
+    """API key for intervals.icu (used as the *password*, with username ``API_KEY``)."""
+    return _bot_key("INTERVALS_ICU_API_KEY")
+
+
+@lru_cache(maxsize=1)
 def get_openrouter_api_key() -> str:
     """Fetches the API key for OpenRouter."""
     secret = GCPSecret(
         project_id="personal-website-318015", secret_id="OPENROUTER_KEY", version=1
     )
     return get_gcp_secret(secret)
-
-
-@lru_cache(maxsize=1)
-def get_trmnl_meme_webhook_url() -> str:
-    """Image-webhook URL for the TRMNL panel's daily-meme plugin.
-
-    Treated as a credential: holding the URL is enough to write to the panel.
-    """
-    return _bot_key("TRMNL_MEME_WEBHOOK_URL")

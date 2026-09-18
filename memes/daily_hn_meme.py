@@ -12,7 +12,6 @@ from telegram.ext import ContextTypes
 
 from gcp_util.secrets import get_telegram_user_id
 from memes.generator import generate_meme
-from memes.trmnl import push_image
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +34,9 @@ def fetch_hn_stories(n: int = NUM_STORIES) -> list[dict]:
                 "title": item["title"],
                 "url": item.get("url", HN_ITEM_PAGE.format(sid)),
                 "hn_url": HN_ITEM_PAGE.format(sid),
+                # Shown on the TRMNL panel; absent on very fresh items.
+                "points": item.get("score"),
+                "comments": item.get("descendants"),
             })
     return stories
 
@@ -66,47 +68,55 @@ def record_template_use(template_name: str) -> None:
     _save_cooldowns(cooldowns)
 
 
+def build_meme_prompt(stories: list[dict]) -> str:
+    """The agent prompt for today's meme, plus the ask for which story it used."""
+    numbered = "\n".join(f"{i+1}. {s['title']}" for i, s in enumerate(stories))
+    return (
+        "Make a meme about the tech/startup world based on today's "
+        "Hacker News front page. Here are the top headlines:\n\n"
+        f"{numbered}\n\n"
+        "After making the meme, reply with ONLY the number of the "
+        "article you based it on, e.g. '3'."
+    )
+
+
+def pick_story(stories: list[dict], agent_text: str) -> dict | None:
+    """Resolve the agent's reply to one of ``stories``, or None if it didn't say.
+
+    The agent is asked for a bare number, but it is a language model, so treat
+    the reply as prose that probably contains one.
+    """
+    match = re.search(r"\b(\d{1,2})\b", agent_text)
+    if not match:
+        return None
+    index = int(match.group(1)) - 1
+    return stories[index] if 0 <= index < len(stories) else None
+
+
 async def send_daily_hn_meme(context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         stories = fetch_hn_stories()
-        numbered = "\n".join(
-            f"{i+1}. {s['title']}" for i, s in enumerate(stories)
-        )
-        prompt = (
-            "Make a meme about the tech/startup world based on today's "
-            "Hacker News front page. Here are the top headlines:\n\n"
-            f"{numbered}\n\n"
-            "After making the meme, reply with ONLY the number of the "
-            "article you based it on, e.g. '3'."
-        )
-
-        excluded = get_excluded_templates()
         img_bytes, template, agent_text = generate_meme(
-            prompt, exclude_templates=excluded,
+            build_meme_prompt(stories), exclude_templates=get_excluded_templates(),
         )
         record_template_use(template)
         logger.info(f"Daily HN meme: template={template}, size={len(img_bytes)}")
 
-        # Try to match the article number from the agent's response
-        caption = None
-        match = re.search(r"\b(\d{1,2})\b", agent_text)
-        if match:
-            idx = int(match.group(1)) - 1
-            if 0 <= idx < len(stories):
-                story = stories[idx]
-                caption = story["hn_url"]
-
+        story = pick_story(stories, agent_text)
         await context.bot.send_photo(
             chat_id=get_telegram_user_id(),
             photo=io.BytesIO(img_bytes),
-            caption=caption,
+            caption=story["hn_url"] if story else None,
         )
-
-        # The e-ink panel is a bonus surface, not the point of the job: a failed
-        # push must not look like a failed meme.
-        try:
-            push_image(img_bytes)
-        except Exception:
-            logger.exception("Failed to push daily HN meme to TRMNL")
     except Exception:
         logger.exception("Failed to send daily HN meme")
+        return
+
+    # Best-effort: the Telegram meme is the thing that must not break, so a
+    # failure to reach TRMNL costs a stale panel and nothing more.
+    try:
+        from memes.trmnl import push_meme
+
+        push_meme(img_bytes, story)
+    except Exception:
+        logger.exception("Failed to push daily meme to TRMNL")
