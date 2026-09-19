@@ -4,11 +4,19 @@
 [Unit]
 Description=Paper triage backend (FastAPI)
 After=network.target
+# TRIAGE_OBSIDIAN_VAULT lives under /mnt/storage, which fstab mounts with
+# `nofail` -- the box boots happily without it. Without this line systemd
+# would start the service anyway and stubs would be written into a plain
+# directory on the root filesystem, where nothing ever syncs them.
+RequiresMountsFor=/mnt/storage
 
 [Service]
 User=jim
-WorkingDirectory=/home/jim/repos/telegram_bot
+WorkingDirectory=/home/jim/deploy/jimbarrett.dev
 EnvironmentFile=/etc/triage.env
+# Runtime data (the screening database) lives outside the checkout, so this
+# directory stays disposable. See util/paths.py.
+Environment=JIMBARRETT_DATA_DIR=/home/jim/data
 # Full path to uv (from `command -v uv`); runs the app from the repo's venv.
 ExecStart=/home/jim/.local/bin/uv run python -m triage
 Restart=on-failure

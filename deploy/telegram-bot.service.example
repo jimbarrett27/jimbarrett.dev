@@ -1,0 +1,31 @@
+# systemd unit for the Telegram bots (main.py runs all of them in one process,
+# and registers every scheduled job on the python-telegram-bot job queue).
+# Install to /etc/systemd/system/telegram-bot.service, then:
+#   sudo systemctl daemon-reload && sudo systemctl restart telegram-bot
+#
+# WorkingDirectory is a DEPLOY clone, not a working checkout. The unit executes
+# whatever is on disk at process start, and Restart=always means a crash or a
+# reboot re-execs it -- so a feature branch left checked out in a shared
+# directory becomes production without anyone deciding to deploy it. Keep this
+# clone detached at origin/main and do development somewhere else:
+#   git -C /home/jim/deploy/jimbarrett.dev fetch origin
+#   git -C /home/jim/deploy/jimbarrett.dev checkout --detach origin/main
+#   sudo systemctl restart telegram-bot triage-backend
+
+[Unit]
+Description=Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=jim
+WorkingDirectory=/home/jim/deploy/jimbarrett.dev
+# Databases and state files live outside the checkout so the deploy clone can be
+# deleted and re-cloned freely. See util/paths.py.
+Environment=JIMBARRETT_DATA_DIR=/home/jim/data
+ExecStart=/home/jim/.local/bin/uv run main.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
