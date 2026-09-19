@@ -12,6 +12,7 @@ from telegram.ext import ContextTypes
 
 from gcp_util.secrets import get_telegram_user_id
 from memes.generator import generate_meme
+from util.paths import data_path
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,11 @@ HN_ITEM_URL = "https://hacker-news.firebaseio.com/v0/item/{}.json"
 HN_ITEM_PAGE = "https://news.ycombinator.com/item?id={}"
 NUM_STORIES = 10
 COOLDOWN_DAYS = 3
-COOLDOWN_FILE = Path(__file__).parent / "recent_templates.json"
+
+
+def cooldown_file() -> Path:
+    """Recently-used meme templates (see :mod:`util.paths`)."""
+    return data_path("memes", "recent_templates.json")
 
 
 def fetch_hn_stories(n: int = NUM_STORIES) -> list[dict]:
@@ -43,13 +48,16 @@ def fetch_hn_stories(n: int = NUM_STORIES) -> list[dict]:
 
 def _load_cooldowns() -> dict[str, str]:
     """Load {template_name: date_str} from disk."""
-    if COOLDOWN_FILE.exists():
-        return json.loads(COOLDOWN_FILE.read_text())
+    path = cooldown_file()
+    if path.exists():
+        return json.loads(path.read_text())
     return {}
 
 
 def _save_cooldowns(data: dict[str, str]) -> None:
-    COOLDOWN_FILE.write_text(json.dumps(data))
+    path = cooldown_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data))
 
 
 def get_excluded_templates() -> list[str]:

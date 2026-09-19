@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from content_screening.constants import DB_NAME
+from util.paths import sqlite_url
 
 # Module-level engine instance (lazy-initialized)
 _engine: Optional[Engine] = None
@@ -19,7 +20,7 @@ def get_engine() -> Engine:
     """Get the SQLAlchemy engine, creating it if necessary."""
     global _engine, _session_factory
     if _engine is None:
-        _engine = create_engine(f"sqlite:///{DB_NAME}")
+        _engine = create_engine(sqlite_url(DB_NAME))
         _session_factory = sessionmaker(bind=_engine)
     return _engine
 

@@ -8,6 +8,8 @@ from typing import Generator, Optional
 from sqlalchemy import create_engine, Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from util.paths import sqlite_url
+
 DB_NAME = "flashcards.db"
 
 # Module-level engine instance (lazy-initialized)
@@ -19,7 +21,7 @@ def get_engine() -> Engine:
     """Get the SQLAlchemy engine, creating it if necessary."""
     global _engine, _session_factory
     if _engine is None:
-        _engine = create_engine(f"sqlite:///{DB_NAME}")
+        _engine = create_engine(sqlite_url(DB_NAME))
         _session_factory = sessionmaker(bind=_engine)
     return _engine
 

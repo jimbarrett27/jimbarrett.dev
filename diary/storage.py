@@ -2,15 +2,20 @@ from datetime import date
 from pathlib import Path
 
 from util.logging_util import setup_logger
+from util.paths import data_path
 
 logger = setup_logger(__name__)
 
-ENTRIES_DIR = Path(__file__).parent / "entries"
 GCS_BUCKET = "jimmy-diary-eu"
 
 
+def entries_dir() -> Path:
+    """Where the monthly markdown files live (see :mod:`util.paths`)."""
+    return data_path("diary", "entries")
+
+
 def _month_file(d: date) -> Path:
-    return ENTRIES_DIR / f"{d.strftime('%Y-%m')}.md"
+    return entries_dir() / f"{d.strftime('%Y-%m')}.md"
 
 
 def _date_heading(d: date) -> str:
@@ -25,7 +30,7 @@ def entry_exists(d: date) -> bool:
 
 
 def save_entry(d: date, text: str) -> None:
-    ENTRIES_DIR.mkdir(exist_ok=True)
+    entries_dir().mkdir(parents=True, exist_ok=True)
     path = _month_file(d)
 
     is_new_file = not path.exists()
