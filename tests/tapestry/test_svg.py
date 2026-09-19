@@ -6,6 +6,7 @@ import xml.dom.minidom as minidom
 
 import pytest
 
+from tapestry import svg as svg_mod
 from tapestry.svg import (
     OVERLAP,
     PANEL_HEIGHT,
@@ -149,3 +150,61 @@ def test_stitch_empty_is_valid():
     out = stitch_svgs([])
     minidom.parseString(out)
     assert 'height="0"' in out
+
+
+# --- Summarising a panel's seam -------------------------------------------
+
+SEAM_PANEL = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="200" '
+    'viewBox="0 0 1600 200">'
+    '<defs><pattern id="linen" width="10" height="10">'
+    '<rect width="10" height="10" fill="#FDFAF5"/></pattern></defs>'
+    # Background: reaches the bottom edge, painted with the pattern.
+    '<rect x="0" y="40" width="1600" height="170" fill="url(#linen)"/>'
+    # Terrain: also reaches the bottom.
+    '<path d="M 0 150 Q 400 140 800 160 L 1600 210 L 0 210 Z" fill="#a87c51"/>'
+    # A bird up in the overlap band -- nowhere near the seam.
+    '<circle cx="300" cy="15" r="6" fill="#b53c2c"/>'
+    "</svg>"
+)
+
+
+def test_seam_palette_reports_the_colours_at_the_bottom_edge():
+    palette = svg_mod.seam_palette(SEAM_PANEL)
+
+    assert "#fdfaf5" in palette, "the pattern's own fill should resolve through url(#linen)"
+    assert "#a87c51" in palette
+    assert "#b53c2c" not in palette, "a bird in the top band is not part of the seam"
+
+
+def test_seam_palette_hands_over_no_markup():
+    """The whole point: the next day gets tones, never anything it can copy.
+
+    Passing the previous panel's SVG is what made the tapestry converge -- the
+    model inherited its palette, its motifs and eventually whole <defs> blocks.
+    """
+    palette = svg_mod.seam_palette(SEAM_PANEL)
+
+    assert all(re.fullmatch(r"#[0-9a-f]{6}", colour) for colour in palette)
+
+
+def test_seam_palette_is_bounded():
+    assert len(svg_mod.seam_palette(SEAM_PANEL, size=2)) == 2
+
+
+def test_seam_palette_falls_back_when_nothing_reaches_the_seam():
+    # An odd panel must still yield a usable hint rather than raising.
+    floating = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 200">'
+        '<circle cx="80" cy="20" r="5" fill="#123456"/></svg>'
+    )
+
+    assert svg_mod.seam_palette(floating) == ["#123456"]
+
+
+def test_seam_palette_survives_markup_that_is_not_well_formed():
+    # svg_problems rejects these, but a stored panel from before that check
+    # existed must not crash the next day's run.
+    broken = '<svg viewBox="0 0 1600 200"><rect fill="#ABCDEF" <<<'
+
+    assert svg_mod.seam_palette(broken) == ["#abcdef"]

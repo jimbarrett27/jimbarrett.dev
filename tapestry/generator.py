@@ -6,15 +6,18 @@ key is fetched securely by the house LLM helper, so nothing secret lives here.
 """
 
 import logging
+from datetime import date as date_cls
 from pathlib import Path
 from typing import NamedTuple
 
 from llm.llm_util import get_llm_response
+from tapestry.style import style_directive
 from tapestry.svg import (
     OVERLAP,
     PANEL_HEIGHT,
     PANEL_WIDTH,
     extract_panel,
+    seam_palette,
     stitch_svgs,
     svg_problems,
 )
@@ -39,12 +42,22 @@ def generate_panel(
     previous_svg: str = None,
     model: str = DEFAULT_MODEL,
     max_attempts: int = MAX_ATTEMPTS,
+    day: str = None,
+    previous_plan: str = None,
 ) -> Panel:
     """Generate one tapestry panel from (at least) three stories.
 
     ``stories`` is a sequence of dicts with ``title``, ``summary`` and ``link``
     keys. Pass ``previous_svg`` to ask the model to visually continue from
-    yesterday's panel.
+    yesterday's panel, and ``previous_plan`` (that panel's stored plan) to tell
+    it what it is reaching up into.
+
+    Only the *seam* of ``previous_svg`` is handed over -- the colours painted
+    along its bottom edge -- never the markup. Passing the whole previous panel
+    is what made the tapestry converge to a single look: the model would inherit
+    the palette, the motifs and eventually whole ``<defs>`` blocks verbatim.
+    Variety is supplied instead by a per-day style brief seeded on ``day``
+    (defaults to today), so consecutive panels are pushed to look unalike.
 
     Each attempt can fail two ways, and both cost one of ``max_attempts``: the
     call to the model can fail outright (a transient OpenRouter/provider error),
@@ -54,9 +67,12 @@ def generate_panel(
     ``max_attempts`` we give up with a ``RuntimeError``. Returns a
     :class:`Panel` with the cleaned SVG and the model's plan.
     """
+    day = day or date_cls.today().isoformat()
     params = {
         "stories": [dict(s) for s in stories[:STORIES_PER_PANEL]],
-        "previous_svg": previous_svg,
+        "seam_palette": seam_palette(previous_svg) if previous_svg else None,
+        "previous_plan": previous_plan,
+        "style_directive": style_directive(day),
         "panel_width": PANEL_WIDTH,
         "panel_height": PANEL_HEIGHT,
         "overlap": OVERLAP,
@@ -118,11 +134,20 @@ def generate_tapestry(stories, days: int = None, model: str = DEFAULT_MODEL) -> 
         groups = groups[:days]
 
     svgs = []
-    previous_svg = None
-    for group in groups:
-        panel = generate_panel(group, previous_svg=previous_svg, model=model)
+    previous_svg = previous_plan = None
+    today = date_cls.today().isoformat()
+    for i, group in enumerate(groups):
+        # These panels aren't one-per-date, so seed each one's style brief on its
+        # position instead: distinct keys are all the brief needs to vary.
+        panel = generate_panel(
+            group,
+            previous_svg=previous_svg,
+            model=model,
+            day=f"{today}#{i}",
+            previous_plan=previous_plan,
+        )
         svgs.append(panel.svg)
-        previous_svg = panel.svg
+        previous_svg, previous_plan = panel.svg, panel.plan
         logger.info("Generated tapestry panel %d/%d", len(svgs), len(groups))
 
     return stitch_svgs(svgs)

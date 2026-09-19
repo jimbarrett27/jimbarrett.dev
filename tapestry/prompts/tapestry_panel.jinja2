@@ -1,38 +1,81 @@
 Below you will find titles, summaries and links for 3 news stories from today.
 I would like you to create a {{ panel_width }} pixel wide by {{ panel_height }} pixel high section of a
-"news tapestry", inspired by the Bayeux tapestry, representing each of these news stories. You can
-use as much detail as you think appropriate, but you should aim to use at least 50 elements. The 3
+"news tapestry", inspired by the Bayeux tapestry, representing each of these news stories. Work it
+densely: aim for at least 150 elements, and treat that as a floor rather than a target. A real
+tapestry rewards close looking, so fill it with small incident -- individual figures, tools, animals,
+folds of cloth, hatching on the ground -- not a handful of large flat shapes. The 3
 images should blend into one coherent section of the tapestry, using a unified background colour
 and mixing elements from each. You should not use any text to label things in the SVG, everything
 should be visual. You should plan out how you will connect the elements into one image before you
 start to generate the SVG.
 
 This panel is one continuous section of a much longer vertical tapestry: another section will be
-joined directly below it{% if previous_svg %}, and yesterday's section sits directly above it{% endif %},
+joined directly below it{% if seam_palette %}, and yesterday's section sits directly above it{% endif %},
 with no visible break between them. Paint a woven background that bleeds right off the LEFT, RIGHT and
 BOTTOM edges. Do NOT draw any borders, frames, outlines, decorative bands, header/footer stripes or
 empty margins. Do NOT draw any horizontal line, ground-line, horizon, fence, wire or other full-width
 horizontal element within {{ overlap }} pixels of the top or bottom edge -- those bands are where the
 neighbouring sections meet, and any horizontal element there turns into a visible seam.
 
+HOUSE STYLE -- every section of this tapestry is drawn this way, and yours must match, so that the
+whole thing reads as one artefact woven by one hand:
+
+- Flat vector shapes with a dark outline. No gradients, no glows, no photographic shading; depth
+  comes from overlap and from slightly darker or lighter tones of the same colour.
+- SMALL figures, drawn simply: a plain body shape and a round head, roughly 25-45 pixels tall in
+  this 200 pixel high panel. Many small figures, never a few large ones. No figure should be more
+  than about a quarter of the panel's height.
+- The ground is built from soft WAVY horizontal bands of muted colour flowing across the width,
+  meeting each other in gentle curves rather than straight lines.
+- A muted, earthy register throughout: buff, tan, warm grey, sage green, dusty blue and bone, with
+  madder red and saffron yellow used sparingly as accents on figures, flags and small objects. Work
+  in at least 8-10 distinct tones from that register. Keep the overall lightness middling -- never a
+  near-white panel, never a dark or night-time one.
+- Dense small incident: individual people, tools, animals, banners, papers, scattered dots and
+  pebbles. A viewer should find new small things on a second look. Crowds are welcome and a packed
+  section is good -- what to avoid is REPETITION, so vary the poses, colours and spacing within a
+  crowd, and set buildings, vehicles, machinery, furniture, trees or boats among the figures rather
+  than leaving them standing on bare ground.
+- Work the FULL HEIGHT of the panel, not a single row of figures across the middle. Build depth in
+  layers: nearer subjects lower down and a little larger, more distant ones smaller and higher up,
+  overlapping each other. No large empty expanse of plain ground anywhere -- if an area looks bare,
+  put terrain texture, distant buildings, trees, birds or scattered objects into it.
+
+TODAY'S SCENE -- the house style above is fixed, but what you depict within it changes each day.
+Follow this brief for the scene itself:
+{{ style_directive }}
+
 {% for story in stories %}
 Title {{ loop.index }}: {{ story.title }}
 Summary {{ loop.index }}: {{ story.summary }}
 Link {{ loop.index }}: {{ story.link }}
 {% endfor %}
-{% if previous_svg %}
+{% if seam_palette %}
 Your section is laid directly on top of yesterday's, overlapping it by the top {{ overlap }} pixels of
 your canvas (y = 0 to y = {{ overlap }}). That overlap is exactly what hides the join, so it is critical
 that you paint NO background whatsoever in that top band: no base fill, no tints, no gradients, no
 bands, no shading -- leave every pixel with y < {{ overlap }} fully transparent, so yesterday's artwork
 shows straight through it unchanged. Begin your woven background rectangle at y = {{ overlap }} (not at
-the top of the canvas) and run it down and off the bottom edge, using the SAME base colour as the
-bottom edge of yesterday's section so the two meet invisibly along that line. You SHOULD let some
-FOREGROUND subjects (figures, animals, banners, objects, smoke, birds) rise up through the transparent
-top band and overlap yesterday's scene, so the two days physically interlock into one flowing tapestry
-rather than two stacked pictures. Do not copy yesterday's elements or offset your coordinates -- just
-draw your own {{ panel_width }}x{{ panel_height }} section following these rules. Yesterday's SVG is:
-{{ previous_svg }}
+the top of the canvas) and run it down and off the bottom edge. You SHOULD let some FOREGROUND subjects
+(figures, animals, banners, objects, smoke, birds) rise up through the transparent top band and overlap
+yesterday's scene, so the two days physically interlock into one flowing tapestry rather than two
+stacked pictures.
+
+These are the colours painted along the bottom edge of yesterday's section, most-used first:
+{{ seam_palette | join(", ") }}
+{% if previous_plan %}
+And this is what yesterday's section depicted, so you know what your foreground is reaching up into:
+{{ previous_plan }}
+{% endif %}
+Use the first of those colours where your background meets yesterday's at y = {{ overlap }}, so the two
+join invisibly along that line. Below that line, move the ground towards today's own terrain as a
+gradual shift rather than an abrupt horizontal change.
+
+Keep the house style above exactly -- that is what makes this one tapestry rather than a stack of
+different pictures. What should change from yesterday is the SCENE: today's terrain, layout and
+subjects, per today's brief. Do not reproduce yesterday's specific motifs or recurring emblems
+unless today's stories genuinely call for them, and do not copy its markup: choose your own patterns
+and shapes to realise the same house style.
 {% else %}
 Since this is the very first section, there is nothing above it: fill the whole canvas with the woven
 background and let it bleed off the top edge as well as the sides and bottom.
