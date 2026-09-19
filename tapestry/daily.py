@@ -54,6 +54,11 @@ def generate_next_panel(day: str | None = None, model: str = DEFAULT_MODEL) -> s
     used by the previous panel are excluded so consecutive days don't repeat a
     story, and the prompt template used is saved alongside the panel for
     provenance. The model used and its stated plan are recorded on the panel.
+
+    The previous panel supplies two things to the new one: its bottom-edge colours
+    (so the seam joins) and its plan (so today's foreground knows what it reaches
+    up into). Its artwork is deliberately *not* passed on -- see
+    :func:`tapestry.generator.generate_panel`.
     """
     day = day or date.today().isoformat()
     index = storage.read_index()
@@ -62,15 +67,22 @@ def generate_next_panel(day: str | None = None, model: str = DEFAULT_MODEL) -> s
         logger.info("Tapestry panel for %s already exists; skipping", day)
         return None
 
-    previous_svg = None
+    previous_svg = previous_plan = None
     previous_links: set[str] = set()
     if index and index["dates"]:
         previous = storage.read_panel(index["dates"][-1])
         previous_svg = previous["svg"]
+        previous_plan = previous.get("plan")
         previous_links = {s["link"] for s in previous["stories"]}
 
     stories = select_stories(exclude_links=previous_links)
-    panel = generate_panel(stories, previous_svg=previous_svg, model=model)
+    panel = generate_panel(
+        stories,
+        previous_svg=previous_svg,
+        model=model,
+        day=day,
+        previous_plan=previous_plan,
+    )
 
     storage.write_panel({
         "date": day,

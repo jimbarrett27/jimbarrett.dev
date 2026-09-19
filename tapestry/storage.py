@@ -26,6 +26,7 @@ offer a "show me the other model's version of this day" toggle by fetching
 no day has one.
 """
 
+import hashlib
 import json
 import logging
 import re
@@ -65,11 +66,27 @@ def read_panel(date: str) -> dict:
 def model_variant(model: str) -> str:
     """Slugify a model id into an alternate's variant name.
 
-    ``anthropic/claude-opus-4.7`` -> ``anthropic-claude-opus-4.7``. Naming the
-    variant after the model means re-archiving the same day+model is idempotent
-    (it rewrites the same object) rather than piling up copies.
+    ``anthropic/claude-opus-4.7`` -> ``anthropic-claude-opus-4.7``.
     """
     return re.sub(r"[^a-z0-9.]+", "-", model.lower()).strip("-")
+
+
+def panel_variant(model: str | None, prompt_template: str | None) -> str:
+    """Name the alternate slot for artwork drawn by ``model`` from ``prompt_template``.
+
+    A rendering is identified by both: the same model draws very differently from
+    a different prompt, which is exactly the case a redraw usually wants to keep
+    the old artwork for. Keying on the model alone would make such a redraw
+    archive over the very panel it was replacing, or (in ``backfill``) skip
+    archiving altogether because the model looked unchanged.
+
+    Deterministic, so re-archiving the same day+model+prompt rewrites the same
+    object rather than piling up copies -- which is what keeps a re-run of
+    ``backfill`` idempotent.
+    """
+    slug = model_variant(model or "unknown")
+    fingerprint = hashlib.sha1((prompt_template or "").encode()).hexdigest()[:7]
+    return f"{slug}-{fingerprint}"
 
 
 def read_alt_panel(date: str, variant: str) -> dict:
@@ -79,18 +96,19 @@ def read_alt_panel(date: str, variant: str) -> dict:
 
 
 def archive_panel(date: str) -> str | None:
-    """Copy the canonical panel for ``date`` into ``alt/``, keyed by its model.
+    """Copy the canonical panel for ``date`` into ``alt/``, keyed by its rendering.
 
     Call this before overwriting a day whose artwork is worth keeping. Returns
-    the variant name written, or ``None`` if there's no canonical panel to
-    archive. The alternate is registered in the manifest so the site can find it.
+    the variant name written (see :func:`panel_variant`), or ``None`` if there's
+    no canonical panel to archive. The alternate is registered in the manifest so
+    the site can find it.
     """
     blob = _bucket().blob(PANEL_BLOB.format(date=date))
     if not blob.exists():
         return None
 
     panel = json.loads(blob.download_as_text())
-    variant = model_variant(panel.get("model") or "unknown")
+    variant = panel_variant(panel.get("model"), panel.get("prompt_template"))
     alt = _bucket().blob(ALT_PANEL_BLOB.format(date=date, variant=variant))
     alt.upload_from_string(json.dumps(panel), content_type="application/json")
     _register_alt(date, variant)

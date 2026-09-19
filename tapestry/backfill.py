@@ -37,10 +37,10 @@ def main(model: str = DEFAULT_MODEL, since: str | None = None, archive: bool = T
     default every stored panel is regenerated.
 
     Unless ``archive`` is false, each panel being replaced is first copied into
-    ``alt/`` (keyed by the model that drew it) so the artwork it's overwriting
-    stays viewable. A panel already drawn by ``model`` isn't archived -- there'd
-    be nothing to distinguish the copy from its replacement -- which also makes
-    re-running a backfill idempotent.
+    ``alt/`` (keyed by the model *and* prompt that drew it) so the artwork it's
+    overwriting stays viewable. A panel already drawn by this same model and
+    prompt isn't archived -- there'd be nothing to distinguish the copy from its
+    replacement -- which also makes re-running a backfill idempotent.
     """
     index = storage.read_index()
     if not index or not index["dates"]:
@@ -56,21 +56,33 @@ def main(model: str = DEFAULT_MODEL, since: str | None = None, archive: bool = T
     # Seed from the last panel we're keeping so the first regenerated day joins
     # the existing tapestry at that seam. None => regenerating from the very top.
     kept = [d for d in dates if d < targets[0]]
-    previous_svg = storage.read_panel(kept[-1])["svg"] if kept else None
+    previous_svg = previous_plan = None
     if kept:
+        seed = storage.read_panel(kept[-1])
+        previous_svg, previous_plan = seed["svg"], seed.get("plan")
         print(f"Seeding from kept panel {kept[-1]}")
 
     prompt_template = Path(PROMPT_TEMPLATE).read_text()
+    target_variant = storage.panel_variant(model, prompt_template)
 
     for date in targets:
         existing = storage.read_panel(date)
         stories = existing["stories"]
+        existing_variant = storage.panel_variant(
+            existing.get("model"), existing.get("prompt_template")
+        )
 
-        if archive and existing.get("model") != model:
+        if archive and existing_variant != target_variant:
             variant = storage.archive_panel(date)
-            print(f"Archived {date}'s {existing.get('model')} panel as alt '{variant}'")
+            print(f"Archived {date}'s existing panel as alt '{variant}'")
 
-        panel = generate_panel(stories, previous_svg=previous_svg, model=model)
+        panel = generate_panel(
+            stories,
+            previous_svg=previous_svg,
+            model=model,
+            day=date,
+            previous_plan=previous_plan,
+        )
         storage.write_panel({
             "date": date,
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -80,7 +92,7 @@ def main(model: str = DEFAULT_MODEL, since: str | None = None, archive: bool = T
             "stories": stories,
             "svg": panel.svg,
         })
-        previous_svg = panel.svg
+        previous_svg, previous_plan = panel.svg, panel.plan
         print(f"Regenerated panel for {date} with {model}")
 
     print(f"Backfill complete: {len(targets)} panel(s)")

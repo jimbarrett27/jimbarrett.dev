@@ -5,6 +5,7 @@ can be unit-tested without authenticating to anything. The OpenRouter call lives
 in :mod:`tapestry.generator`.
 """
 
+import collections
 import json
 import re
 import xml.etree.ElementTree as ET
@@ -106,8 +107,10 @@ def extract_svg(content: str) -> str:
 # the retry log can say *why* a panel was rejected.
 
 # Elements that actually put ink on the canvas. A valid panel should have a
-# healthy number of these; the prompt asks for >= 50, so requiring a handful is
-# very safe and only rejects badly truncated output.
+# healthy number of these; the prompt asks for >= 150, so requiring a handful is
+# very safe and only rejects badly truncated output. Deliberately not raised to
+# police density: a thin-but-complete panel is worth keeping, and a retry costs
+# five minutes and another generation.
 _DRAWABLE_TAGS = frozenset({
     "path", "rect", "circle", "ellipse", "line", "polyline", "polygon",
     "text", "image", "use",
@@ -164,6 +167,153 @@ def svg_problems(svg: str) -> list[str]:
 def is_valid_svg(svg: str) -> bool:
     """True if ``svg`` has no structural problems (see :func:`svg_problems`)."""
     return not svg_problems(svg)
+
+
+# --- Summarising a panel's seam -------------------------------------------
+# The next day's panel has to meet this one along its bottom edge without a
+# visible join. It used to be given the whole previous SVG to work that out,
+# which made it copy the palette (and even whole <defs> blocks) verbatim, so the
+# tapestry converged to one look. All it actually needs is the handful of colours
+# painted at the bottom edge, which is what these helpers extract.
+
+_HEX_RE = re.compile(r"#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})\b")
+_URL_FILL_RE = re.compile(r"^url\(\s*#([^)\s]+)\s*\)$")
+_COORD_RE = re.compile(r"-?\d+(?:\.\d+)?")
+_TRANSLATE_RE = re.compile(r"translate\(\s*-?[\d.]+\s*[, ]\s*(-?[\d.]+)")
+
+_SEAM_PALETTE_SIZE = 6
+
+
+def _normalise_hex(colour: str) -> str:
+    """Expand ``#abc`` to ``#aabbcc`` and lowercase, so tones dedupe properly."""
+    colour = colour.lower()
+    if len(colour) == 4:
+        return "#" + "".join(c * 2 for c in colour[1:])
+    return colour
+
+
+def _resolve_fill(fill: str, defs: dict[str, str]) -> str | None:
+    """Turn a ``fill`` attribute into a concrete hex colour, if it names one.
+
+    ``fill="url(#linen)"`` is the common case: the panels paint their background
+    with a woven pattern, so the tone that actually shows at the seam is the
+    first solid colour *inside* that pattern (or gradient), not the reference.
+    """
+    fill = fill.strip()
+    if not fill or fill in {"none", "transparent"}:
+        return None
+
+    ref = _URL_FILL_RE.match(fill)
+    if ref:
+        return defs.get(ref.group(1))
+
+    match = _HEX_RE.fullmatch(fill)
+    return _normalise_hex(match.group(0)) if match else None
+
+
+def _def_colours(root) -> dict[str, str]:
+    """Map each ``id`` in the document to the first hex colour defined under it.
+
+    Used to see through ``url(#...)`` references to patterns and gradients.
+    """
+    colours = {}
+    for element in root.iter():
+        element_id = element.get("id")
+        if element_id is None:
+            continue
+        for child in element.iter():
+            for attribute in ("fill", "stop-color", "stroke"):
+                value = child.get(attribute)
+                if value and _HEX_RE.fullmatch(value.strip()):
+                    colours[element_id] = _normalise_hex(value.strip())
+                    break
+            if element_id in colours:
+                break
+    return colours
+
+
+def _max_y(element, offset: float) -> float | None:
+    """Roughly how far down the canvas ``element`` reaches, or ``None`` if unknown.
+
+    Deliberately crude: it reads the obvious geometry attributes and the raw
+    numbers out of a path's ``d``, and only understands ``translate`` transforms.
+    This drives a *hint* in a prompt, so a mis-attributed colour costs nothing --
+    it does not need to be a layout engine.
+    """
+    tag = _local_name(element.tag)
+
+    def number(name):
+        try:
+            return float(element.get(name))
+        except (TypeError, ValueError):
+            return None
+
+    if tag == "rect":
+        y, height = number("y") or 0.0, number("height")
+        return offset + y + height if height is not None else None
+    if tag in {"circle", "ellipse"}:
+        cy = number("cy") or 0.0
+        r = number("r") if tag == "circle" else number("ry")
+        return offset + cy + (r or 0.0)
+    if tag in {"path", "polygon", "polyline", "line"}:
+        source = element.get("d") or element.get("points") or ""
+        if tag == "line":
+            source = f"{element.get('y1', '')} {element.get('y2', '')}"
+        numbers = [float(n) for n in _COORD_RE.findall(source)]
+        # Path data interleaves x and y; taking the overall max is close enough
+        # for "does this reach the bottom edge?".
+        return offset + max(numbers) if numbers else None
+    return None
+
+
+def seam_palette(svg: str, size: int = _SEAM_PALETTE_SIZE) -> list[str]:
+    """Return the colours painted at ``svg``'s bottom edge, most-used first.
+
+    This is the whole handover to the next day's panel: enough to continue the
+    ground tone invisibly, and nothing that can be copied as a style.
+
+    Falls back to the panel's most-used colours overall if nothing could be
+    attributed to the bottom band (an unparseable or unusually structured panel),
+    so the caller always gets a usable hint rather than an exception.
+    """
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError:
+        counts = collections.Counter(_normalise_hex(c) for c in _HEX_RE.findall(svg))
+        return [colour for colour, _ in counts.most_common(size)]
+
+    defs = _def_colours(root)
+    try:
+        _, height = _svg_dimensions(svg, PANEL_WIDTH, PANEL_HEIGHT)
+    except AttributeError:
+        # Parsed as XML but has no literal <svg> open tag to read a size off.
+        # svg_problems rejects that shape; assume the standard panel rather than
+        # letting a stored oddity break the next day's run.
+        height = PANEL_HEIGHT
+    seam_top = height - OVERLAP
+
+    seam = collections.Counter()
+    everything = collections.Counter()
+
+    def walk(element, offset: float):
+        for child in element:
+            if _local_name(child.tag) == "defs":
+                continue
+            translate = _TRANSLATE_RE.search(child.get("transform") or "")
+            child_offset = offset + (float(translate.group(1)) if translate else 0.0)
+
+            colour = _resolve_fill(child.get("fill") or "", defs)
+            if colour:
+                everything[colour] += 1
+                reach = _max_y(child, child_offset)
+                if reach is not None and reach >= seam_top:
+                    seam[colour] += 1
+            walk(child, child_offset)
+
+    walk(root, 0.0)
+
+    ranked = seam or everything
+    return [colour for colour, _ in ranked.most_common(size)]
 
 
 # --- Stitching panels into one tapestry -----------------------------------
