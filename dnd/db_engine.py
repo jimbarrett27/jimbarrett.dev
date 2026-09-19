@@ -4,6 +4,8 @@ from typing import Generator, Optional
 from sqlalchemy import create_engine, Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from util.paths import sqlite_url
+
 DB_NAME = "dnd.db"
 
 _engine: Optional[Engine] = None
@@ -13,7 +15,7 @@ _session_factory: Optional[sessionmaker] = None
 def get_engine() -> Engine:
     global _engine, _session_factory
     if _engine is None:
-        _engine = create_engine(f"sqlite:///{DB_NAME}")
+        _engine = create_engine(sqlite_url(DB_NAME))
         _session_factory = sessionmaker(bind=_engine)
     return _engine
 

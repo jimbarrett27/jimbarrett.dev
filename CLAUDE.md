@@ -17,6 +17,19 @@ Personal monorepo: a Python automation/bot codebase at the root, plus the
 | `content_screening/` | Paper discovery/screening pipeline feeding `triage/` |
 | `llm/`, `agents/`, `gcp_util/`, `util/` | Shared helpers |
 
+## Runtime data
+
+The SQLite databases and state files the bots write (`content_screening.db`,
+`flashcards.db`, `dnd.db`, `diary/entries/`, `memes/recent_templates.json`) are
+**not** part of the checkout. Resolve their paths through `util.paths`
+(`data_path`, `sqlite_url`) rather than relative to the cwd or `__file__`.
+
+`JIMBARRETT_DATA_DIR` points that at a stable location; the server sets it so the
+deploy clone stays disposable. Unset — dev and tests — everything resolves to the
+repo root, exactly where these files have always lived. Alembic honours the same
+variable via each `migrations/env.py`, so migrations and the app never disagree
+about which file they mean.
+
 ## Website (`website/`)
 
 Angular 21 SPA deployed to Google App Engine. See `website/CLAUDE.md` for the full

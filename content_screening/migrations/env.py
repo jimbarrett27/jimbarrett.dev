@@ -5,7 +5,9 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from content_screening.constants import DB_NAME
 from content_screening.orm_models import Base
+from util.paths import sqlite_url
 
 config = context.config
 
@@ -13,6 +15,12 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
+
+# The engine the app uses resolves its path through util.paths, which honours
+# JIMBARRETT_DATA_DIR. Alembic has to agree: left to the static url in
+# alembic.ini it would happily migrate a fresh, empty database next to the
+# checkout while the real one silently went unmigrated.
+config.set_main_option("sqlalchemy.url", sqlite_url(DB_NAME))
 
 
 def run_migrations_offline() -> None:
