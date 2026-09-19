@@ -20,7 +20,7 @@ Rules:
 - Use exactly one tool call. Do not explain yourself, just make the meme.
 """
 
-DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
+DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
 
 
 def generate_meme(

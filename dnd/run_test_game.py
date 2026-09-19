@@ -250,8 +250,8 @@ def main():
     parser = argparse.ArgumentParser(description="Run an AI-vs-AI D&D test game")
     parser.add_argument("--rounds", type=int, default=3, help="Number of rounds to play (default: 3)")
     parser.add_argument("--players", type=int, default=3, help="Number of players (default: 3, max: 3)")
-    parser.add_argument("--model", type=str, default="deepseek/deepseek-v4-flash",
-                        help="AI player model (default: deepseek/deepseek-v4-flash)")
+    parser.add_argument("--model", type=str, default="deepseek/deepseek-v4.1-flash",
+                        help="AI player model (default: deepseek/deepseek-v4.1-flash)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Show debug logs including full LLM prompts")
     args = parser.parse_args()
 
