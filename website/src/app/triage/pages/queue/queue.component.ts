@@ -8,6 +8,7 @@ import {
   inject,
   signal,
   viewChildren,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { PaperCardComponent } from '../../components/paper-card/paper-card.component';
 import { ShortcutHelpComponent } from '../../components/shortcut-help/shortcut-help.component';
@@ -98,6 +99,7 @@ const UNDO_WINDOW_MS = 30_000;
       <app-shortcut-help (close)="showHelp.set(false)" />
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       .queue {

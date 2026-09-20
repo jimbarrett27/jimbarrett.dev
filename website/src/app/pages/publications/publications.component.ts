@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { PublicationsService } from '../../core/services/publications.service';
 import { PublicationsData } from '../../core/models/publication.interface';
 
@@ -54,6 +54,7 @@ import { PublicationsData } from '../../core/models/publication.interface';
       }
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
     .publications {
       max-width: 720px;
