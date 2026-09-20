@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { BlogService } from '../../core/services/blog.service';
@@ -42,6 +42,7 @@ declare global {
       }
     </article>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
     .blog-post {
       max-width: 720px;

@@ -1,4 +1,4 @@
-import { Component, computed, input, output, signal } from '@angular/core';
+import { Component, computed, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Decision, Paper } from '../../models/paper.model';
 
@@ -104,6 +104,7 @@ interface RoutingBadge {
       </div>
     </article>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       .card {

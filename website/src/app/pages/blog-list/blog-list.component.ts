@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { BlogService } from '../../core/services/blog.service';
@@ -31,6 +31,7 @@ import { BlogPostSummary } from '../../core/models/blog-post.interface';
       </div>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
     .blog-list {
       max-width: 960px;

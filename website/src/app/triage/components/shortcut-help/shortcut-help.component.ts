@@ -1,4 +1,4 @@
-import { Component, output } from '@angular/core';
+import { Component, output, ChangeDetectionStrategy } from '@angular/core';
 import { SHORTCUTS } from '../../shortcuts';
 
 /** Modal overlay listing keyboard shortcuts, toggled with `?`. */
@@ -25,6 +25,7 @@ import { SHORTCUTS } from '../../shortcuts';
       </div>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       .backdrop {
