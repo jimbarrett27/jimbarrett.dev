@@ -7,7 +7,7 @@ from llm.llm_util import get_llm_response
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 
-DEFAULT_AI_MODEL = "deepseek/deepseek-v4-flash"
+DEFAULT_AI_MODEL = "deepseek/deepseek-v4.1-flash"
 
 
 async def generate_action(
