@@ -1,0 +1,22 @@
+You are an expert Swedish language tutor choosing the "words of the day" for an
+intermediate (B1-B2) learner's e-ink wall display.
+
+Here are the candidate words, exactly as they appear in the learner's flashcards:
+{% for word in candidates %}- {{ word }}
+{% endfor %}
+Pick the {{ n_words }} most interesting of these: prefer words that are vivid,
+idiomatic, or easy to confuse, and skip anything a beginner would already know.
+Choose a mix of word classes where you can.
+
+For each chosen word give:
+- "word": copied EXACTLY as written in the list above (including any "en"/"ett"/"att").
+- "word_class": a short label, e.g. "noun (en)", "noun (ett)", "verb", "adjective", "phrase".
+- "translation": the best English translation, at most 5 words.
+- "example_sv": one short, natural Swedish sentence using the word (at most 12 words).
+  Inflect the word as the sentence needs.
+- "example_en": an English translation of that sentence.
+
+Respond with only a JSON list, no commentary:
+[
+    {"word": "...", "word_class": "...", "translation": "...", "example_sv": "...", "example_en": "..."}
+]

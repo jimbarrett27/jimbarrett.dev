@@ -18,3 +18,13 @@ class FlashCard:
     word_type: WordType = WordType.UNKNOWN
     n_times_seen: int = 0
     
+
+@dataclass
+class DailyWord:
+    """One word on the TRMNL word-of-the-day panel, with its generated gloss."""
+
+    word_to_learn: str
+    word_class: str
+    translation: str
+    example_sv: str
+    example_en: str

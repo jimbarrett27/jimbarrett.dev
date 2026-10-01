@@ -11,9 +11,10 @@ from typing import List, Optional
 from sqlalchemy import select
 
 from swedish.db_engine import get_engine, get_session
-from swedish.flash_card import FlashCard, WordType
+from swedish.flash_card import DailyWord, FlashCard, WordType
 from swedish.orm_models import (
     Base,
+    DailyWordORM,
     FlashCardORM,
     flashcard_orm_to_dataclass,
     flashcard_dataclass_to_orm,
@@ -150,3 +151,53 @@ def count_cards() -> int:
     with get_session() as session:
         stmt = select(FlashCardORM)
         return len(session.execute(stmt).scalars().all())
+
+
+def get_all_cards() -> List[FlashCard]:
+    """Get every flashcard."""
+    with get_session() as session:
+        orms = session.execute(select(FlashCardORM)).scalars().all()
+        return [flashcard_orm_to_dataclass(orm) for orm in orms]
+
+
+def get_daily_words(date: str) -> List[DailyWord]:
+    """The panel words stored for an ISO date, in slot order (empty if none yet)."""
+    with get_session() as session:
+        stmt = (
+            select(DailyWordORM)
+            .where(DailyWordORM.date == date)
+            .order_by(DailyWordORM.slot.asc())
+        )
+        return [
+            DailyWord(
+                word_to_learn=orm.word_to_learn,
+                word_class=orm.word_class,
+                translation=orm.translation,
+                example_sv=orm.example_sv,
+                example_en=orm.example_en,
+            )
+            for orm in session.execute(stmt).scalars().all()
+        ]
+
+
+def save_daily_words(date: str, words: List[DailyWord]):
+    """Store a day's panel words, replacing anything already stored for that date."""
+    with get_session() as session:
+        session.query(DailyWordORM).filter(DailyWordORM.date == date).delete()
+        for slot, word in enumerate(words):
+            session.add(DailyWordORM(
+                date=date,
+                slot=slot,
+                word_to_learn=word.word_to_learn,
+                word_class=word.word_class,
+                translation=word.translation,
+                example_sv=word.example_sv,
+                example_en=word.example_en,
+            ))
+
+
+def get_recent_daily_words(since_date: str) -> set[str]:
+    """Words shown on the panel on or after an ISO date."""
+    with get_session() as session:
+        stmt = select(DailyWordORM.word_to_learn).where(DailyWordORM.date >= since_date)
+        return set(session.execute(stmt).scalars().all())

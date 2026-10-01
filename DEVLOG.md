@@ -4,6 +4,35 @@ Decisions and milestones for this repo, newest first. One `### entry` per decisi
 milestone under a `## YYYY-MM-DD` date header — capture the *why*, not just the *what*.
 Maintained via the `/devlog` skill. (Format mirrors `SignalAgents/RESEARCH_LOG.md`.)
 
+## 2026-10-01
+
+### Swedish word-of-the-day panel on TRMNL, drawn from the flashcard deck
+
+A third TRMNL panel, replacing the official Swedish word-of-the-day app, whose words
+were too simple. Four words a day from `flashcards.db`, rotated hourly: word huge,
+translation, then a Swedish example sentence with its English beneath. Same shape as
+the fitness panel — data webhook, Liquid template in the repo, alert-once job on the
+notify bot.
+
+**Selection leans hard, then lets the LLM judge interest.** The deck is mostly the
+seeded word lists, so a uniform draw would surface "en katt" as often as "en klippa".
+Cards are weighted by FSRS difficulty squared (unreviewed ones at the deck's mean, ~5,
+so they still appear), 16 are sampled without replacement, and one LLM call picks the
+four most interesting and writes the glosses. Difficulty knows what *this* learner
+struggles with but not what's dull; the LLM covers the second half. Anything shown in
+the last 60 days is excluded.
+
+**Generated once, then only read.** Words land in a new `daily_words` table keyed
+`(date, slot)`; the first push of a Stockholm day generates, every later one is a
+lookup. The slot is `hour % 4`, so rotation needs no state and survives restarts. The
+production `flashcards.db` turned out never to have been alembic-stamped (`upgrade
+head` tries to recreate `flashcards`), so migration `002` exists for completeness but
+it's `init_db()`'s `create_all` at bot startup that actually creates the table. The
+PNG preview is unverified: the server has no Chrome. Files: `swedish/daily_words.py`,
+`swedish/daily.py`, `swedish/trmnl.py`, `swedish/preview.py`,
+`swedish/templates/swedish_full.liquid`, `swedish/prompts/daily_words.jinja2`,
+`swedish/orm_models.py`, `swedish/database.py`, `gcp_util/secrets.py`, `main.py`.
+
 ## 2026-09-18
 
 ### Fitness panel on TRMNL, and the meme panel rebuilt on the data webhook

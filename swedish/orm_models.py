@@ -54,3 +54,20 @@ def flashcard_dataclass_to_orm(card: FlashCard) -> FlashCardORM:
         last_review_epoch=card.last_review_epoch,
         next_review_min_epoch=card.next_review_min_epoch,
     )
+
+
+class DailyWordORM(Base):
+    """One of the day's words on the TRMNL panel, generated once and then re-read.
+
+    Keyed by (date, slot) so the hourly rotation is a lookup, never a regeneration.
+    """
+
+    __tablename__ = "daily_words"
+
+    date: Mapped[str] = mapped_column(String, primary_key=True)  # ISO, Stockholm
+    slot: Mapped[int] = mapped_column(Integer, primary_key=True)
+    word_to_learn: Mapped[str] = mapped_column(Text, nullable=False)
+    word_class: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    translation: Mapped[str] = mapped_column(Text, nullable=False)
+    example_sv: Mapped[str] = mapped_column(Text, nullable=False)
+    example_en: Mapped[str] = mapped_column(Text, nullable=False)
