@@ -1,19 +1,20 @@
-"""Scheduler hooks for pushing the fitness panel to TRMNL.
+"""Scheduler hook for pushing the fitness panel to TRMNL.
 
-Cadence is set by how often the underlying numbers actually move, not by how
-often the device redraws. CTL and ATL change once a day, when intervals.icu
-recomputes them after the overnight Garmin sync; activities land during the day.
-So a morning push carries the new fitness figures and a late-evening push catches
-whatever was trained. Both are timed to the sync rather than the clock: the watch
-uploads once its owner is up and about, and training happens after work. Two a
-day sits far inside TRMNL's twelve-an-hour ceiling.
+The panel is refreshed on a short fixed interval rather than at hand-picked times.
+CTL/ATL move when intervals.icu recomputes them after the watch syncs, and
+activities land whenever training happens -- neither is predictable enough to
+time pushes around, and each refresh is only two intervals.icu reads plus one
+webhook post. Every ``REFRESH_INTERVAL_SECONDS`` sits well inside TRMNL's
+twelve-an-hour ceiling.
 
 Pushing is not the same as displaying: TRMNL holds the data and the device picks
 it up on its own refresh, so the panel updates at the device's cadence, not this
-job's.
+job's. Pushing more often than that just means the device always finds fresh data.
 
-Unlike the tapestry, a missed push costs nothing permanent -- the panel simply
-shows older numbers until the next one -- so this notifies only on failure.
+A missed push costs nothing permanent -- the panel shows older numbers until the
+next one -- and the next scheduled run is itself the retry. So a failure is only
+reported once it has persisted for ``ALERT_AFTER_FAILURES`` runs in a row, once,
+with a single follow-up when pushes recover.
 """
 
 import asyncio
@@ -26,8 +27,10 @@ from fitness.metrics import collect
 
 logger = logging.getLogger(__name__)
 
-RETRY_DELAY_SECONDS = 15 * 60
-MAX_RUNS_PER_DAY = 3
+REFRESH_INTERVAL_SECONDS = 30 * 60
+# Four consecutive failures at a 30-minute interval: about two hours stale.
+ALERT_AFTER_FAILURES = 4
+FAILURES_KEY = "fitness_panel_consecutive_failures"
 
 
 def refresh_panel() -> bool:
@@ -39,24 +42,24 @@ async def fitness_panel_task(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Scheduler hook: refresh the TRMNL panel in a worker thread.
 
     Fetching from intervals.icu and posting to TRMNL are both blocking network
-    calls, so they run off the event loop. A failure retries a couple of times --
-    long enough to ride out a transient outage -- and only then says so, because
-    a Telegram ping on every successful push twice a day is just noise.
+    calls, so they run off the event loop. Consecutive failures are counted in
+    ``bot_data`` so an outage pings once when it crosses the threshold, not on
+    every run while it lasts.
     """
-    run = (context.job.data or {}).get("run", 1) if context.job else 1
+    failures = context.bot_data.get(FAILURES_KEY, 0)
+    notify = context.bot_data["minecraft_bot"].send_message_to_me
     try:
-        if await asyncio.to_thread(refresh_panel):
-            logger.info("TRMNL fitness panel refreshed (run %d)", run)
-            return
-        raise RuntimeError("TRMNL rejected the push")
+        if not await asyncio.to_thread(refresh_panel):
+            raise RuntimeError("TRMNL rejected the push")
     except Exception:
-        logger.exception("Failed to refresh TRMNL fitness panel (run %d)", run)
-        if run < MAX_RUNS_PER_DAY and context.job_queue:
-            context.job_queue.run_once(
-                fitness_panel_task, when=RETRY_DELAY_SECONDS, data={"run": run + 1}
-            )
-            logger.info("Retrying fitness panel in %d minutes", RETRY_DELAY_SECONDS // 60)
-        else:
-            context.bot_data["minecraft_bot"].send_message_to_me(
-                f"📉 TRMNL fitness panel failed after {run} attempts — panel is stale"
-            )
+        failures += 1
+        context.bot_data[FAILURES_KEY] = failures
+        logger.exception("Failed to refresh TRMNL fitness panel (%d in a row)", failures)
+        if failures == ALERT_AFTER_FAILURES:
+            notify(f"📉 TRMNL fitness panel has failed {failures} times in a row — panel is stale")
+        return
+
+    context.bot_data[FAILURES_KEY] = 0
+    logger.info("TRMNL fitness panel refreshed")
+    if failures >= ALERT_AFTER_FAILURES:
+        notify("📈 TRMNL fitness panel is updating again")
