@@ -20,7 +20,7 @@ from dnd.dnd_bot import get_handlers as get_dnd_handlers
 from memes.daily_hn_meme import send_daily_hn_meme
 from minecraft.react_to_logs import react_to_logs as react_to_minecraft_logs
 from minecraft.healthcheck import run_healthcheck, run_on_demand_check, run_daily_summary
-from content_screening.scanner import run_full_scan, format_scan_summary
+from content_screening.scanner import run_full_scan
 from tapestry.daily import daily_tapestry_task
 from fitness.daily import fitness_panel_task
 from telegram_bot.telegram_bot import TelegramBot
@@ -121,23 +121,25 @@ async def daily_summary_task(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def daily_paper_scan_task(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Scan the paper feeds once a day and send a single summary message.
+    """Scan the paper feeds once a day, pinging only if something looks broken.
 
     The scan does blocking network + LLM work, so it runs in a worker thread to
-    avoid stalling the bots' event loop. Per-paper notifications are intentionally
-    gone — papers flow silently into the triage queue; this is the only message.
-
-    The scan runs every day so papers keep flowing into the triage queue, but the
-    summary message is suppressed on weekends.
+    avoid stalling the bots' event loop. Papers flow silently into the triage
+    queue; a healthy run sends nothing. The notify bot speaks up when the scan
+    raises, or when every feed comes back empty on a weekday -- the fetchers
+    swallow per-feed errors, so that is what a broken network or feed looks like.
+    Weekends are exempt from the empty check because arXiv doesn't announce then.
     """
+    notify = context.bot_data["minecraft_bot"].send_message_to_me
     try:
         counts = await asyncio.to_thread(run_full_scan)
-        if is_weekend():
-            logger.info("Weekend — paper scan ran but summary message suppressed.")
-            return
-        context.bot_data["minecraft_bot"].send_message_to_me(format_scan_summary(counts))
     except Exception as e:
-        logger.error(f"Error in daily paper scan: {e}")
+        logger.exception("Error in daily paper scan")
+        notify(f"📚 Daily paper scan failed: {e}"[:500])
+        return
+    logger.info(f"Daily paper scan: {counts}")
+    if counts["found"] == 0 and not is_weekend():
+        notify("📚 Daily paper scan got nothing back from any feed — they may be broken")
 
 
 # --- App setup ---
@@ -191,8 +193,8 @@ def build_memes_app() -> Application:
 
 def build_minecraft_app() -> Application:
     app = Application.builder().token(get_minecraft_bot_key()).build()
-    # Kept as the personal "notify" bot (sends the daily paper-scan summary)
-    # even though the Minecraft server itself was sunsetted (2026-06-02).
+    # Kept as the personal "notify" bot (alerts when the daily paper scan or
+    # tapestry go wrong) even though the Minecraft server itself was sunsetted (2026-06-02).
     app.bot_data["minecraft_bot"] = TelegramBot(get_minecraft_bot_key())
 
     app.add_handler(CommandHandler("start", minecraft_start))
@@ -204,8 +206,8 @@ def build_minecraft_app() -> Application:
         # app.job_queue.run_repeating(periodic_tasks, interval=60, first=10)
         # app.job_queue.run_repeating(healthcheck_task, interval=300, first=30)
         # app.job_queue.run_daily(daily_summary_task, time=dt_time(hour=10, minute=0))
-        # Daily paper feed scan → one summary message (triage replaces the
-        # old per-paper Telegram notifications).
+        # Daily paper feed scan → papers land in the triage queue; the bot only
+        # messages if the scan looks broken.
         app.job_queue.run_daily(daily_paper_scan_task, time=stockholm_time(7, 30))
         # Daily news-tapestry panel → generated + uploaded to GCS for the website.
         app.job_queue.run_daily(daily_tapestry_task, time=stockholm_time(9, 0))

@@ -101,7 +101,7 @@ async def daily_tapestry_task(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Scheduler hook: generate today's panel in a worker thread.
 
     The generation does blocking network + LLM work, so it runs off the event
-    loop. On success it pings the user via the notify bot.
+    loop. Success is silent; the notify bot only speaks up when it goes wrong.
 
     A failed run reschedules itself (up to ``MAX_RUNS_PER_DAY`` runs in total) so
     an outage at the scheduled hour doesn't cost the day -- ``generate_next_panel``
@@ -112,9 +112,7 @@ async def daily_tapestry_task(context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         day = await asyncio.to_thread(generate_next_panel)
         if day:
-            context.bot_data["minecraft_bot"].send_message_to_me(
-                f"🧵 News tapestry updated for {day}"
-            )
+            logger.info("News tapestry updated for %s", day)
     except Exception:
         logger.exception("Failed to generate daily tapestry panel (run %d)", run)
         if run < MAX_RUNS_PER_DAY and context.job_queue:
