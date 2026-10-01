@@ -23,6 +23,7 @@ from minecraft.healthcheck import run_healthcheck, run_on_demand_check, run_dail
 from content_screening.scanner import run_full_scan
 from tapestry.daily import daily_tapestry_task
 from fitness.daily import REFRESH_INTERVAL_SECONDS, fitness_panel_task
+from swedish import daily as swedish_panel
 from telegram_bot.telegram_bot import TelegramBot
 from util.logging_util import configure_root_logging, setup_logger, log_telegram_message_received
 from util.timezone import stockholm_time, stockholm_now
@@ -220,6 +221,15 @@ def build_minecraft_app() -> Application:
         app.job_queue.run_repeating(
             fitness_panel_task, interval=REFRESH_INTERVAL_SECONDS, first=30
         )
+        # TRMNL Swedish word panel → hourly, on the hour, cycling through the
+        # day's words; the first run of a day generates them. Also once on
+        # startup so a restart doesn't leave the panel an hour behind.
+        app.job_queue.run_repeating(
+            swedish_panel.swedish_panel_task,
+            interval=swedish_panel.REFRESH_INTERVAL_SECONDS,
+            first=swedish_panel.seconds_to_next_hour(),
+        )
+        app.job_queue.run_once(swedish_panel.swedish_panel_task, when=45)
     else:
         logger.warning("JobQueue not available - daily paper scan disabled.")
 
