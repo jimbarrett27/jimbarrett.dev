@@ -18,6 +18,9 @@ def setup_logger(name: str, level=logging.INFO) -> logging.Logger:
     """
     logger = logging.getLogger(name)
     logger.setLevel(level)
+    # This logger prints through its own handler; don't also pass records up to
+    # the root handler from configure_root_logging, or every line appears twice.
+    logger.propagate = False
     
     # Avoid adding handlers multiple times
     if not logger.handlers:
@@ -32,6 +35,22 @@ def setup_logger(name: str, level=logging.INFO) -> logging.Logger:
         logger.addHandler(console_handler)
     
     return logger
+
+def configure_root_logging(level=logging.INFO) -> None:
+    """Give plain ``logging.getLogger(__name__)`` loggers somewhere to write.
+
+    Without a root handler only warnings and errors from those loggers surface
+    (via Python's last-resort handler), so a long-running process's INFO lines --
+    "panel refreshed", "pushed ok" -- silently vanish and a quiet journal can't
+    tell success from a job that never ran.
+
+    Chatty third-party loggers are held at WARNING: httpx logs every Telegram
+    long-poll request at INFO, and those URLs carry the bot token.
+    """
+    logging.basicConfig(level=level, format=LOG_FORMAT, datefmt=DATE_FORMAT, stream=sys.stdout)
+    for noisy in ("httpx", "httpcore", "apscheduler"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
 
 def log_llm_interaction(logger: logging.Logger, template_path: str, params: dict, 
                         response: str, model_name: str, duration_ms: float = None):

@@ -24,7 +24,7 @@ from content_screening.scanner import run_full_scan
 from tapestry.daily import daily_tapestry_task
 from fitness.daily import REFRESH_INTERVAL_SECONDS, fitness_panel_task
 from telegram_bot.telegram_bot import TelegramBot
-from util.logging_util import setup_logger, log_telegram_message_received
+from util.logging_util import configure_root_logging, setup_logger, log_telegram_message_received
 from util.timezone import stockholm_time, stockholm_now
 
 logger = setup_logger(__name__)
@@ -269,6 +269,7 @@ async def run():
 
 
 def main():
+    configure_root_logging()
     print("Starting telegram bots...")
     init_swedish_db()
     init_dnd_db()

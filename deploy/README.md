@@ -52,7 +52,8 @@ rather than failing, so the bot would come up healthy with no history.
 ## Scheduled jobs
 
 There are no cron jobs or systemd timers. Everything periodic is a
-`job_queue.run_daily(...)` registered in `main.py`, inside the bot process. So
+`job_queue.run_daily(...)` or `run_repeating(...)` registered in `main.py`, inside
+the bot process. So
 "did the job run?" is answered with `journalctl -u telegram-bot`, and a job that
 isn't in the deployed commit simply never fires — silently, since nothing else
 knows it should have.
