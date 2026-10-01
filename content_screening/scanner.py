@@ -134,26 +134,21 @@ def run_full_scan() -> dict:
     """Run all source scans (silently) and return summary counts.
 
     A single dedup index is shared across the sources so the same paper arriving
-    from more than one feed in this run is inserted only once.
+    from more than one feed in this run is inserted only once. ``found`` counts
+    everything the feeds returned before dedup, so zero means the feeds came back
+    empty (the fetchers swallow per-feed errors) rather than "nothing new".
     """
     dedup_index = load_dedup_index()
-    _, a_new, a_rel = run_arxiv_scan(dedup_index)
-    _, r_new, r_rel = run_rss_scan(dedup_index)
-    _, o_new, o_rel = run_openalex_scan(dedup_index)
+    a_found, a_new, a_rel = run_arxiv_scan(dedup_index)
+    r_found, r_new, r_rel = run_rss_scan(dedup_index)
+    o_found, o_new, o_rel = run_openalex_scan(dedup_index)
     return {
+        "found": a_found + r_found + o_found,
         "new": a_new + r_new + o_new,
         "relevant": a_rel + r_rel + o_rel,
         "pending": count_pending_triage(),
     }
 
-
-def format_scan_summary(counts: dict) -> str:
-    """The single daily message: new papers found + total awaiting triage."""
-    return (
-        "📚 Daily paper scan\n"
-        f"New papers: {counts['new']} ({counts['relevant']} relevant for triage)\n"
-        f"Awaiting triage: {counts['pending']}"
-    )
 
 
 def is_scan_due(source_type: SourceType) -> bool:
