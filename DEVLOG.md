@@ -6,6 +6,26 @@ Maintained via the `/devlog` skill. (Format mirrors `SignalAgents/RESEARCH_LOG.m
 
 ## 2026-10-09
 
+### Voice notes: Whistle → Whisper large-v3-turbo, and retry the Telegram download
+
+First real use: three notes, deliberately using "verisimilitude". Two came back as
+"very similar to …" and the third "timed out". The logs showed the timeout wasn't
+transcription at all — `get_file` hit python-telegram-bot's 5 s default read timeout
+and the model never ran. The download now gets 30 s per call and three attempts with
+backoff on `NetworkError`, and a failed download says so instead of "Transcription
+failed".
+
+**Model choice from the saved recordings, not benchmarks.** The vault keeps each
+note's audio, so both notes were re-run through Whistle and five Whisper sizes. In a
+sentence, everything from small.en up got the word; spoken alone, only large-v3-turbo
+did. Whistle got it only with keyword biasing, which needs the word in advance. Turbo
+costs ~7 s for a short note and ~0.5× real time beyond that — thread count and beam
+size barely move it — and 1.6 GB resident, so it loads at startup. Whisper splits long
+audio itself, so the hand-rolled 30 s chunking is gone. The VAD filter stays (silence
+transcribes to nothing), but with `speech_pad_ms=1000`: the default padding clipped a
+lone "verisimilitude" to "Verisimilar-tude". Note frontmatter now records
+`model: whisper-large-v3-turbo`.
+
 ### Voice notes bot: Telegram voice note → local transcript → Obsidian
 
 MVP of a voice-capture loop. A new bot (`TELEGRAM_VOICE_NOTES_BOT_KEY`) takes voice
