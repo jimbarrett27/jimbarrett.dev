@@ -12,6 +12,7 @@ Personal monorepo: a Python automation/bot codebase at the root, plus the
 | Path | What it is |
 |---|---|
 | `telegram_bot/`, `swedish/`, `minecraft/`, `diary/`, `photos/`, `memes/`, `dnd/` | Telegram bot surfaces, one per bot |
+| `voice_notes/`, `handwritten_notes/` | Voice notes (local Whisper) and photos of handwritten notes (OpenRouter vision) → Obsidian vault; both on the voice notes bot |
 | `triage/` | FastAPI backend for the paper-triage app — serves the `/triage` UI in `website/` |
 | `tapestry/` | Daily news-tapestry generator; writes SVG panels to GCS, rendered by the tapestry page in `website/` |
 | `content_screening/` | Paper discovery/screening pipeline feeding `triage/` |

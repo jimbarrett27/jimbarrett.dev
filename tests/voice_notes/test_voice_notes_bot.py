@@ -148,6 +148,6 @@ async def test_silence_is_still_filed(monkeypatch, fakes):
 
 def test_long_transcripts_are_split_on_spaces():
     text = " ".join(["word"] * 2000)  # ~10k chars
-    parts = bot._split_message(text)
+    parts = bot.split_message(text)
     assert all(len(p) <= bot.TELEGRAM_MAX_MESSAGE for p in parts)
     assert " ".join(parts) == text

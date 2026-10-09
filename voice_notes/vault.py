@@ -35,17 +35,17 @@ class SavedNote:
     audio_path: Path
 
 
-def _free_stem(when: datetime) -> str:
-    """'2026-10-09 1432', or '2026-10-09 1432 (2)' etc. if that minute is taken."""
+def free_stem(folder: Path, when: datetime) -> str:
+    """'2026-10-09 1432', or '2026-10-09 1432 (2)' etc. if that minute is taken in ``folder``."""
     base = when.strftime("%Y-%m-%d %H%M")
     stem, n = base, 1
-    while (notes_dir() / f"{stem}.md").exists():
+    while (folder / f"{stem}.md").exists():
         n += 1
         stem = f"{base} ({n})"
     return stem
 
 
-def _write_atomic(path: Path, data: bytes) -> None:
+def write_atomic(path: Path, data: bytes) -> None:
     """Write via a hidden temp file + rename, so sync never sees half a file."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.tmp")
@@ -74,12 +74,12 @@ def render_note(*, when: datetime, duration_s: float, model: str,
 def save_note(*, when: datetime, audio: bytes, audio_ext: str, duration_s: float,
               model: str, transcript: str) -> SavedNote:
     """Write the audio and its transcript note; audio first, so the embed never dangles."""
-    stem = _free_stem(when)
+    stem = free_stem(notes_dir(), when)
     audio_path = notes_dir() / AUDIO_FOLDER / f"{stem}.{audio_ext}"
     note_path = notes_dir() / f"{stem}.md"
 
-    _write_atomic(audio_path, audio)
-    _write_atomic(note_path, render_note(
+    write_atomic(audio_path, audio)
+    write_atomic(note_path, render_note(
         when=when, duration_s=duration_s, model=model,
         audio_name=audio_path.name, transcript=transcript,
     ).encode("utf-8"))

@@ -25,7 +25,7 @@ DOWNLOAD_TIMEOUT_SECONDS = 30
 RETRY_DELAY_SECONDS = 2.0
 
 
-async def _download(bot, file_id: str) -> bytes:
+async def download(bot, file_id: str, what: str = "voice note") -> bytes:
     for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
         try:
             file = await bot.get_file(file_id, read_timeout=DOWNLOAD_TIMEOUT_SECONDS)
@@ -33,11 +33,11 @@ async def _download(bot, file_id: str) -> bytes:
         except NetworkError as e:
             if attempt == DOWNLOAD_ATTEMPTS:
                 raise
-            logger.warning(f"Voice note download attempt {attempt} failed ({e}); retrying")
+            logger.warning(f"{what.capitalize()} download attempt {attempt} failed ({e}); retrying")
             await asyncio.sleep(RETRY_DELAY_SECONDS * attempt)
 
 
-def _split_message(text: str, limit: int = TELEGRAM_MAX_MESSAGE) -> list[str]:
+def split_message(text: str, limit: int = TELEGRAM_MAX_MESSAGE) -> list[str]:
     """Split on whitespace into pieces Telegram will accept."""
     parts = []
     while len(text) > limit:
@@ -65,7 +65,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await message.reply_text("Transcribing…")
 
     try:
-        audio_bytes = await _download(context.bot, media.file_id)
+        audio_bytes = await download(context.bot, media.file_id)
     except Exception as e:
         logger.exception("Voice note download failed")
         await message.reply_text(
@@ -80,7 +80,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await message.reply_text(f"Transcription failed: {e}"[:500])
         return
 
-    for part in _split_message(text or "(no speech recognised)"):
+    for part in split_message(text or "(no speech recognised)"):
         await message.reply_text(part)
 
     # The transcript is already in the chat, so a failed save loses nothing.
@@ -112,7 +112,8 @@ async def preload_model(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "Send me a voice note and I'll transcribe it into Obsidian."
+        "Send me a voice note, or photos of handwritten notes (several pages as one "
+        "album), and I'll transcribe them into Obsidian."
     )
 
 

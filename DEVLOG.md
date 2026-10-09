@@ -6,6 +6,35 @@ Maintained via the `/devlog` skill. (Format mirrors `SignalAgents/RESEARCH_LOG.m
 
 ## 2026-10-09
 
+### Handwritten notes: photos on the voice notes bot → vision model → Obsidian
+
+The voice notes bot now also takes photos of handwritten pages. A photo, an image
+sent as a file (full resolution), or an album becomes one note in
+`Handwritten Notes/<YYYY-MM-DD HHMM>.md`: frontmatter, the transcription, then the
+page images embedded from `images/`, kept so a better model can re-run over them
+later. Album pages arrive as separate updates sharing a `media_group_id`, so they're
+buffered and flushed by a `job_queue.run_once` 2.5 s after the first. Failure
+handling copies voice notes: transcript in the chat before the vault write.
+
+**Cloud, unlike voice notes.** The server has no GPU, and CPU handwriting OCR is
+either line-level only (TrOCR) or a multi-billion-parameter VLM at minutes per page
+and worse accuracy, so pages go to a vision model on OpenRouter with the existing key.
+
+**Model chosen by a bake-off on five real pages**, picked to be hard: an arrow
+carrying text back to the previous page, a crossed-out paragraph, a contingency
+table with formulas, a page photographed sideways with no EXIF rotation, and names
+with diacritics. Claude Sonnet 5.5 won: 3–9 s and ~1.2¢ a page, and its mistakes
+are single letters in names ("Harmark", "Loca"), which proofreading catches.
+Gemini 3.5 Flash was runner-up (best on names, and in the album it even moved the
+arrowed sentence to where the arrow points) but silently dropped words, varied
+run to run, and took ~20 s at ~3¢. GPT-5.6 Sol, Qwen3-VL and both DeepSeek vision
+models were out: they transcribed crossed-out text, got formulas wrong, or garbled
+the sideways page (one invented $\frac{1}{4}\pi r^3$). After the first round the
+prompt gained paragraph reflow, LaTeX for maths and `[?]` for doubtful names and
+numbers; Sonnet uses `[?]` only sometimes. Not yet exercised live in the bot.
+Files: `handwritten_notes/`, `llm/llm_util.py` (`get_vision_response`), `main.py`;
+`voice_notes/` helpers made public for reuse.
+
 ### Voice notes: Whistle → Whisper large-v3-turbo, and retry the Telegram download
 
 First real use: three notes, deliberately using "verisimilitude". Two came back as
