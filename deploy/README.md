@@ -72,3 +72,12 @@ Transcription runs locally with Whisper large-v3-turbo via `faster-whisper`
 starts, then cached under `~/.cache/huggingface`. The model is loaded at startup
 and stays resident: it adds about 1.6 GB to the bot process. Expect ~7 s for a
 short note and about half real time for long ones (a 1-minute note ≈ 30 s).
+
+## Handwritten notes
+
+The same bot also takes photos of handwritten notes (`handwritten_notes/`). A single
+photo, an image sent as a file, or an album of pages becomes one note in
+`$OBSIDIAN_VAULT_DIR/Handwritten Notes/`, with the page images under `images/`.
+Unlike voice notes, transcription is **not** local: the pages are sent to a vision
+model on OpenRouter (`handwritten_notes.transcribe.MODEL`), using the existing
+OpenRouter key, so no new secret is needed.
