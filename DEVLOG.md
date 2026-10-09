@@ -4,6 +4,34 @@ Decisions and milestones for this repo, newest first. One `### entry` per decisi
 milestone under a `## YYYY-MM-DD` date header — capture the *why*, not just the *what*.
 Maintained via the `/devlog` skill. (Format mirrors `SignalAgents/RESEARCH_LOG.md`.)
 
+## 2026-10-09
+
+### Voice notes bot: Telegram voice note → local transcript → Obsidian
+
+MVP of a voice-capture loop. A new bot (`TELEGRAM_VOICE_NOTES_BOT_KEY`) takes voice
+notes or audio files, transcribes them on the server, replies with the transcript and
+writes `Voice Notes/<YYYY-MM-DD HHMM>.md` (frontmatter + audio embed + transcript) plus
+the original audio under `Voice Notes/audio/` into the vault. `obsidian-sync.service`
+already syncs `/mnt/storage/data/obsidian`, so the bot only writes files. Keeping the
+audio is deliberate: the planned LLM step can re-run over the source later.
+
+**Cactus Whistle, not Whisper.** 17 MB, CPU-only, Apache-2.0. Its benchmarks are all
+Apple M4 and the PyPI package is a pure-Python wrapper that downloads a native engine
+from Hugging Face, so Linux x86_64 was spiked first: it works, 11 s of speech in
+~0.8 s. Its hard limit is 30 s per pass. The library's `stream()` handles any length
+but re-decodes a sliding window, so it ran at ~0.7× real time (32 s for 47 s); cutting
+at the quietest 100 ms in the last 5 s before each 30 s boundary and transcribing the
+pieces did 57 s in 3.9 s with nothing lost or doubled at the seams. The cost is slightly
+lighter punctuation across a seam. Telemetry is anonymous counts but off anyway
+(`NEEDLE_TELEMETRY=0`).
+
+**Nothing gets lost.** The transcript is sent before the vault write, so a failed save
+still leaves it in the chat. Files are written via hidden temp + rename so `ob sync`
+never picks up half a note. The unit now has `RequiresMountsFor=/mnt/storage`, since
+the vault sits on the `nofail` mount. Files: `voice_notes/audio.py`,
+`voice_notes/transcribe.py`, `voice_notes/vault.py`, `voice_notes/voice_notes_bot.py`,
+`main.py`, `gcp_util/secrets.py`, `deploy/telegram-bot.service.example`.
+
 ## 2026-10-01
 
 ### Swedish word-of-the-day panel on TRMNL, drawn from the flashcard deck

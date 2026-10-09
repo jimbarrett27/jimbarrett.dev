@@ -57,3 +57,17 @@ the bot process. So
 "did the job run?" is answered with `journalctl -u telegram-bot`, and a job that
 isn't in the deployed commit simply never fires — silently, since nothing else
 knows it should have.
+
+## Voice notes and the Obsidian vault
+
+The voice notes bot (`voice_notes/`) writes transcripts and their audio into
+`$OBSIDIAN_VAULT_DIR/Voice Notes/`. On the server that is the vault
+`obsidian-sync.service` keeps in sync (`/mnt/storage/data/obsidian`), so a note
+reaches the other devices without the bot knowing anything about Obsidian Sync.
+Because the vault is on the `nofail` mount, the unit carries
+`RequiresMountsFor=/mnt/storage`.
+
+Transcription runs locally with Cactus Whistle (`cactus-needle`). Its engine
+library and weights are downloaded from Hugging Face the first time a note is
+transcribed, then cached under `~/.cache`. The package's anonymous telemetry is
+switched off in `voice_notes/transcribe.py`.

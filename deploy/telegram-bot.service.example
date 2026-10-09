@@ -15,6 +15,10 @@
 [Unit]
 Description=Telegram Bot
 After=network.target
+# The voice notes bot writes into the Obsidian vault on /mnt/storage, which is
+# mounted nofail: without this the bot could start with the mount missing and
+# write notes into an empty directory that Obsidian Sync never sees.
+RequiresMountsFor=/mnt/storage
 
 [Service]
 Type=simple
@@ -23,6 +27,9 @@ WorkingDirectory=/home/jim/deploy/jimbarrett.dev
 # Databases and state files live outside the checkout so the deploy clone can be
 # deleted and re-cloned freely. See util/paths.py.
 Environment=JIMBARRETT_DATA_DIR=/home/jim/data
+# Voice notes land in "<vault>/Voice Notes/"; obsidian-sync.service carries them
+# to every device. Unset, they go under JIMBARRETT_DATA_DIR/obsidian instead.
+Environment=OBSIDIAN_VAULT_DIR=/mnt/storage/data/obsidian
 ExecStart=/home/jim/.local/bin/uv run main.py
 Restart=always
 RestartSec=10
