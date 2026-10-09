@@ -67,7 +67,8 @@ reaches the other devices without the bot knowing anything about Obsidian Sync.
 Because the vault is on the `nofail` mount, the unit carries
 `RequiresMountsFor=/mnt/storage`.
 
-Transcription runs locally with Cactus Whistle (`cactus-needle`). Its engine
-library and weights are downloaded from Hugging Face the first time a note is
-transcribed, then cached under `~/.cache`. The package's anonymous telemetry is
-switched off in `voice_notes/transcribe.py`.
+Transcription runs locally with Whisper large-v3-turbo via `faster-whisper`
+(CPU, int8). The weights are downloaded from Hugging Face the first time the bot
+starts, then cached under `~/.cache/huggingface`. The model is loaded at startup
+and stays resident: it adds about 1.6 GB to the bot process. Expect ~7 s for a
+short note and about half real time for long ones (a 1-minute note ≈ 30 s).

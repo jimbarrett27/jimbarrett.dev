@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from telegram.error import TimedOut
 
 from voice_notes import voice_notes_bot as bot
 
@@ -23,12 +24,19 @@ class FakeMessage:
 
 
 class FakeFile:
-    async def download_as_bytearray(self):
+    async def download_as_bytearray(self, **kwargs):
         return bytearray(b"OggS-fake")
 
 
 class FakeBot:
-    async def get_file(self, file_id):
+    def __init__(self, failures=0):
+        self.failures = failures
+        self.calls = []
+
+    async def get_file(self, file_id, **kwargs):
+        self.calls.append(kwargs)
+        if len(self.calls) <= self.failures:
+            raise TimedOut()
         return FakeFile()
 
 
@@ -44,6 +52,7 @@ VOICE = SimpleNamespace(file_id="abc")
 
 @pytest.fixture(autouse=True)
 def fakes(monkeypatch, tmp_path):
+    monkeypatch.setattr(bot, "RETRY_DELAY_SECONDS", 0)
     monkeypatch.setenv("OBSIDIAN_VAULT_DIR", str(tmp_path))
     monkeypatch.setattr(bot, "get_telegram_user_id", lambda: ME)
     monkeypatch.setattr(bot.audio, "decode", lambda b: np.zeros(16_000 * 5, dtype=np.float32))
@@ -64,6 +73,29 @@ async def test_replies_with_transcript_and_files_the_note(fakes):
     note = fakes / "Voice Notes" / "2026-10-09 1432.md"
     assert note.read_text().endswith("Remember the milk.\n")
     assert (fakes / "Voice Notes" / "audio" / "2026-10-09 1432.ogg").read_bytes() == b"OggS-fake"
+
+
+@pytest.mark.asyncio
+async def test_download_is_retried_with_a_longer_timeout(fakes):
+    flaky = FakeBot(failures=2)
+    update, message = _update(voice=VOICE)
+    await bot.handle_voice(update, SimpleNamespace(bot=flaky))
+
+    assert len(flaky.calls) == 3
+    assert all(c["read_timeout"] == bot.DOWNLOAD_TIMEOUT_SECONDS for c in flaky.calls)
+    assert message.replies[1] == "Remember the milk."
+    assert (fakes / "Voice Notes" / "2026-10-09 1432.md").exists()
+
+
+@pytest.mark.asyncio
+async def test_download_failure_says_so_not_transcription(fakes):
+    dead = FakeBot(failures=bot.DOWNLOAD_ATTEMPTS)
+    update, message = _update(voice=VOICE)
+    await bot.handle_voice(update, SimpleNamespace(bot=dead))
+
+    assert len(dead.calls) == bot.DOWNLOAD_ATTEMPTS
+    assert message.replies[1].startswith("Couldn't download the voice note from Telegram")
+    assert not (fakes / "Voice Notes").exists()
 
 
 @pytest.mark.asyncio

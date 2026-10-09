@@ -18,7 +18,7 @@ def tmp_vault(tmp_path, monkeypatch):
 
 def _save(transcript="Buy more coffee.", when=WHEN):
     return vault.save_note(when=when, audio=b"OggS-fake", audio_ext="ogg",
-                           duration_s=12.4, model="Cactus-Compute/whistle",
+                           duration_s=12.4, model="whisper-large-v3-turbo",
                            transcript=transcript)
 
 
@@ -33,7 +33,7 @@ def test_note_has_frontmatter_embed_and_transcript():
     text = _save().note_path.read_text()
     assert text.startswith("---\ncreated: 2026-10-09T14:32:07+02:00\nduration: 12\n")
     assert "source: telegram\n" in text
-    assert "model: Cactus-Compute/whistle\n" in text
+    assert "model: whisper-large-v3-turbo\n" in text
     assert "  - voice-note\n" in text
     assert "![[2026-10-09 1432.ogg]]" in text
     assert text.endswith("Buy more coffee.\n")

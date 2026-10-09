@@ -15,7 +15,7 @@ from gcp_util.secrets import get_swedish_bot_key, get_minecraft_bot_key, get_pho
 from swedish.database import init_db as init_swedish_db, populate_db
 from swedish import swedish_bot
 from photos.photos_bot import get_handlers as get_photo_handlers
-from voice_notes.voice_notes_bot import get_handlers as get_voice_notes_handlers
+from voice_notes.voice_notes_bot import get_handlers as get_voice_notes_handlers, preload_model
 from dnd.database import init_db as init_dnd_db
 from dnd.dnd_bot import get_handlers as get_dnd_handlers
 from memes.daily_hn_meme import send_daily_hn_meme
@@ -186,6 +186,9 @@ def build_voice_notes_app() -> Application:
     app = Application.builder().token(get_voice_notes_bot_key()).build()
     for handler in get_voice_notes_handlers():
         app.add_handler(handler)
+    if app.job_queue:
+        # Whisper takes ~20 s to load; do it now rather than on the first note.
+        app.job_queue.run_once(preload_model, when=0)
     return app
 
 
