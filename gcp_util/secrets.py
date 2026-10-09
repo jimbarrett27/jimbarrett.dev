@@ -71,6 +71,11 @@ def get_photos_bot_key() -> str:
 
 
 @lru_cache(maxsize=1)
+def get_voice_notes_bot_key() -> str:
+    return _bot_key("TELEGRAM_VOICE_NOTES_BOT_KEY")
+
+
+@lru_cache(maxsize=1)
 def get_zotero_api_key() -> str:
     """Zotero API key for the paper-triage Zotero pusher (build step 7)."""
     return _bot_key("ZOTERO_API_KEY")

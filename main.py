@@ -11,10 +11,11 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from gcp_util.secrets import get_swedish_bot_key, get_minecraft_bot_key, get_photos_bot_key, get_dnd_bot_key, get_memes_bot_key
+from gcp_util.secrets import get_swedish_bot_key, get_minecraft_bot_key, get_photos_bot_key, get_dnd_bot_key, get_memes_bot_key, get_voice_notes_bot_key
 from swedish.database import init_db as init_swedish_db, populate_db
 from swedish import swedish_bot
 from photos.photos_bot import get_handlers as get_photo_handlers
+from voice_notes.voice_notes_bot import get_handlers as get_voice_notes_handlers
 from dnd.database import init_db as init_dnd_db
 from dnd.dnd_bot import get_handlers as get_dnd_handlers
 from memes.daily_hn_meme import send_daily_hn_meme
@@ -181,6 +182,13 @@ def build_photos_app() -> Application:
     return app
 
 
+def build_voice_notes_app() -> Application:
+    app = Application.builder().token(get_voice_notes_bot_key()).build()
+    for handler in get_voice_notes_handlers():
+        app.add_handler(handler)
+    return app
+
+
 def build_memes_app() -> Application:
     app = Application.builder().token(get_memes_bot_key()).build()
     if app.job_queue:
@@ -242,8 +250,9 @@ async def run():
     photos_app = build_photos_app()
     dnd_app = build_dnd_app()
     memes_app = build_memes_app()
+    voice_notes_app = build_voice_notes_app()
 
-    async with swedish_app, minecraft_app, photos_app, dnd_app, memes_app:
+    async with swedish_app, minecraft_app, photos_app, dnd_app, memes_app, voice_notes_app:
         await swedish_app.start()
         await swedish_app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
         await minecraft_app.start()
@@ -254,6 +263,8 @@ async def run():
         await dnd_app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
         await memes_app.start()
         await memes_app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+        await voice_notes_app.start()
+        await voice_notes_app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
 
         logger.info("All bots are running.")
         print("All bots are running...")
@@ -276,6 +287,8 @@ async def run():
         await dnd_app.stop()
         await memes_app.updater.stop()
         await memes_app.stop()
+        await voice_notes_app.updater.stop()
+        await voice_notes_app.stop()
 
 
 def main():
