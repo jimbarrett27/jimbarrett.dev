@@ -110,11 +110,14 @@ def get_profile(name: str) -> ModelProfile:
 
 def build_chat_model(profile: ModelProfile) -> BaseChatModel:
     if profile.provider == "local":
-        from langchain_openai import ChatOpenAI
+        # ChatDeepSeek, not ChatOpenAI: llama-server returns the model's thinking as
+        # reasoning_content, which ChatOpenAI silently drops. ChatDeepSeek keeps it
+        # in additional_kwargs, where the agent logs it (and the live page shows it).
+        from langchain_deepseek import ChatDeepSeek
 
-        return ChatOpenAI(
+        return ChatDeepSeek(
             model=profile.model,
-            base_url=profile.base_url,
+            api_base=profile.base_url,
             api_key="not-needed",
             temperature=profile.temperature,
             max_tokens=profile.max_output_tokens,
