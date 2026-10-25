@@ -281,9 +281,11 @@ def observe(pb: PyBoy) -> dict:
 # -- describing ----------------------------------------------------------------
 
 def _where(dx: int, dy: int) -> str:
+    """How to get somewhere from the player, e.g. "(from you: 5 up, 4 right)"."""
     parts = [f"{abs(dy)} {'down' if dy > 0 else 'up'}" if dy else "",
              f"{abs(dx)} {'right' if dx > 0 else 'left'}" if dx else ""]
-    return ", ".join(p for p in parts if p) or "here"
+    steps = ", ".join(p for p in parts if p)
+    return f"(from you: {steps})" if steps else "(where you are)"
 
 
 def _mon(m: dict) -> str:
@@ -362,10 +364,10 @@ def describe(before: dict | None, after: dict, pressed: list[str] = ()) -> str:
         rel = lambda t: _where(t["x"] - p["x"], t["y"] - p["y"])  # noqa: E731
         if after["people"]:
             lines.append("People: " + "; ".join(
-                f"{q['name']} at ({q['x']}, {q['y']}), {rel(q)}" for q in after["people"]))
+                f"{q['name']} at ({q['x']}, {q['y']}) {rel(q)}" for q in after["people"]))
         if after["exits"]:
             lines.append("Exits: " + "; ".join(
-                f"({e['x']}, {e['y']}) to {e['to']}, {rel(e)}" for e in after["exits"]))
+                f"to {e['to']} at ({e['x']}, {e['y']}) {rel(e)}" for e in after["exits"]))
         grid = after["grid"]
         on_screen = [t for t in after["things"]
                      if 0 <= t["x"] - grid["left"] < 10 and 0 <= t["y"] - grid["top"] < 9
