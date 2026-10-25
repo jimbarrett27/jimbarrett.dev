@@ -376,12 +376,15 @@ def main(argv=None) -> int:
                 logger.info("publishing %s", run_dir.name)
                 publisher = RunPublisher(run_dir, dest, keep_minutes=args.keep_minutes)
             if publisher is not None:
+                # Checked before syncing, so the sync below always carries the end
+                # state: checking after could see an end the sync just missed.
+                ended = not follow and not publisher.live()
                 try:
                     if publisher.sync():
                         logger.info("published %s: %d clips", publisher.id, len(publisher.clips))
                 except Exception:  # keep following; the next pass retries from the same place
                     logger.exception("publishing %s failed", publisher.id)
-                if args.once or (not follow and not publisher.live()):
+                if args.once or ended:
                     return 0
             time.sleep(args.interval)
     except KeyboardInterrupt:
