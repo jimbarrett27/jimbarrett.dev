@@ -9,7 +9,7 @@ import pytest
 
 from gb_agent.emulator import RecordingGame, boot, save_state
 from gb_agent.library import Library
-from gb_agent.publish import LocalDestination, RunPublisher, latest_run
+from gb_agent.publish import LocalDestination, RunPublisher, latest_run, main
 
 
 class FakeRun:
@@ -205,6 +205,24 @@ def test_a_run_is_not_live_once_ended_or_silent(run, dest):
     assert not pub.live()
     pub.sync()
     assert read(dest, "current.json")["live"] is False
+
+
+def test_publishing_a_run_carries_its_end_even_when_it_ends_mid_sync(
+        tmp_path, test_rom, test_start, monkeypatch):
+    monkeypatch.setenv("JIMBARRETT_DATA_DIR", str(tmp_path))
+    run = FakeRun(tmp_path / "gb_agent" / "runs", test_rom, test_start)
+    sync = RunPublisher.sync
+
+    def sync_then_end(self):  # the run writes its end just after a sync read the manifest
+        changed = sync(self)
+        run.manifest(ended=True)
+        return changed
+
+    monkeypatch.setattr(RunPublisher, "sync", sync_then_end)
+    bucket = tmp_path / "bucket"
+    assert main(["--run", run.dir.name, "--dest", str(bucket), "--interval", "0"]) == 0
+    live = read(LocalDestination(bucket), f"runs/{run.dir.name}/live.json")
+    assert live["live"] is False and live["stop_reason"] == "frame_budget"
 
 
 def test_latest_run_is_the_newest_with_a_manifest(tmp_path):
