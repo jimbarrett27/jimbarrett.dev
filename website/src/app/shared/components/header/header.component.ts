@@ -14,6 +14,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
           <a routerLink="/publications" routerLinkActive="active">Publications</a>
           <a routerLink="/blog" routerLinkActive="active">Blog</a>
           <a routerLink="/tapestry" routerLinkActive="active">Tapestry</a>
+          <a routerLink="/gb-agent" routerLinkActive="active">Pokémon Agent</a>
         </div>
       </nav>
     </header>
