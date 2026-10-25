@@ -209,7 +209,14 @@ def test_a_run_is_not_live_once_ended_or_silent(run, dest):
 
 def test_publishing_a_run_carries_its_end_even_when_it_ends_mid_sync(
         tmp_path, test_rom, test_start, monkeypatch):
-    monkeypatch.setenv("JIMBARRETT_DATA_DIR", str(tmp_path))
+    from dataclasses import replace
+
+    from gb_agent.games import GAMES
+
+    monkeypatch.setenv("GB_AGENT_DIR", str(tmp_path / "gb_agent"))
+    rom = tmp_path / "test.gb"
+    rom.write_bytes(test_rom)  # main() loads the run's ROM through its game profile
+    monkeypatch.setitem(GAMES, "silver", replace(GAMES["silver"], rom=rom))
     run = FakeRun(tmp_path / "gb_agent" / "runs", test_rom, test_start)
     sync = RunPublisher.sync
 

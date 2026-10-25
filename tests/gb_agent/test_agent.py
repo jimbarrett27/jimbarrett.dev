@@ -117,7 +117,6 @@ def test_a_whole_run(make_run):
         say(call("list_scripts")),
         say(call("write_script", name="tap_a", reason="tap A once",
                  code='def tap_a(game):\n    """Tap A."""\n    game.tap("a")\n')),
-        say(call("run_script", name="walk", args={"frames": 50}, test=True)),
         say(call("run_script", name="walk", args={"frames": 100})),
         say(call("watch_memory", label="wram0", addr="0xC000")),
         say(call("run_script", name="tap_a")),
@@ -131,8 +130,7 @@ def test_a_whole_run(make_run):
     assert run.frame == 300
 
     steps = jsonl(run, "steps.jsonl")
-    assert [(s["script"], s["test"], s["kept"]) for s in steps[:3]] == [
-        ("walk", True, False), ("walk", False, True), ("tap_a", False, True)]
+    assert [(s["script"], s["kept"]) for s in steps[:2]] == [("walk", True), ("tap_a", True)]
     assert steps[-1]["frames"] == 107 and steps[-1]["kept"]  # shortened to what was left
 
     events = jsonl(run, "events.jsonl")
@@ -146,16 +144,23 @@ def test_a_whole_run(make_run):
 
     manifest = json.loads((run.dir / "manifest.json").read_text())
     assert manifest["stop_reason"] == "frame_budget" and manifest["frame"] == 300
-    assert manifest["llm_calls"] == 10
+    assert manifest["llm_calls"] == 9
     assert (run.dir / "library" / "library" / "tap_a.py").exists()
 
 
-def test_test_runs_spend_no_frames(make_run):
+def test_one_off_code_is_kept_in_the_library(make_run):
     run = make_run()
-    play(run, [say(call("run_code", code="game.tick(500)", test=True))])
-    assert run.frame == 0
-    [step] = jsonl(run, "steps.jsonl")
-    assert step["frames"] == 500 and not step["kept"]
+    play(run, [say(call("run_code", code="game.tick(50)")),
+               say(call("press", button="a"))])
+    assert run.frame > 50
+    snippet = run.dir / "library" / "snippets" / "step00001.py"
+    assert snippet.read_text() == "game.tick(50)"
+    assert not (run.dir / "library" / "snippets" / "step00002.py").exists()  # press is ours
+    first, second = jsonl(run, "steps.jsonl")
+    assert first["kept"] and first["version"] and second["version"] is None
+    events = jsonl(run, "events.jsonl")
+    assert {e["version"] for e in events if e["step"] == 1} == {first["version"]}
+    assert "One-off code at step 1" in run.library._git("log", "--format=%s").stdout
 
 
 def test_steps_that_go_behind_games_back_are_not_kept(make_run):
@@ -276,18 +281,6 @@ def test_repeated_identical_calls_get_a_note(make_run):
     assert "Note:" not in tools.call("read_memory", {"addr": "0xC001"}).text
 
 
-def test_long_test_run_streaks_get_a_note(make_run):
-    from gb_agent.tools import Tools
-
-    tools = Tools(make_run())
-    texts = [tools.call("run_code", {"code": f"game.tick({i + 1})", "test": True}).text
-             for i in range(4)]
-    assert "test runs in a row" not in texts[2]
-    assert "4 test runs in a row" in texts[3]
-    kept = tools.call("run_code", {"code": "game.tick(1)"}).text
-    assert "test runs in a row" not in kept
-
-
 def test_reports_say_how_much_of_the_screen_changed(make_run):
     from gb_agent.tools import Tools
 
@@ -343,11 +336,12 @@ def test_kept_steps_are_capped_per_step(make_run):
     assert run.frame == 100  # the second step was refused at the limit, nothing advanced
 
 
-def test_budget_used_up_refuses_kept_steps_but_not_tests(make_run):
+def test_budget_used_up_refuses_steps(make_run):
     run = make_run(frame_budget=30)
     run.frame = 30  # as if spent
     from gb_agent.tools import Tools
 
     tools = Tools(run)
     assert tools.call("wait", {"frames": 5}).text.startswith("Error: the frame budget")
-    assert "test run" in tools.call("run_code", {"code": "game.tick(5)", "test": True}).text
+    assert tools.call("run_code", {"code": "game.tick(5)"}).text.startswith(
+        "Error: the frame budget")

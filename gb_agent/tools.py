@@ -15,7 +15,6 @@ from gb_agent.trace import Trace
 
 MAX_TOOL_TEXT = 6_000
 REPEAT_NOTE_AT = 3  # identical calls in a row before saying so
-TEST_STREAK_NOTE_AT = 4  # test runs in a row before saying so
 MAX_NOTES = 2_000
 
 
@@ -33,19 +32,14 @@ def _fn(name: str, description: str, properties: dict, required: list[str]) -> d
     }}
 
 
-_TEST = {"type": "boolean", "description":
-         "true: try it and see the result, then throw it away (costs no frames)"}
-
 TOOL_SCHEMAS = [
     _fn("run_script", "Run a script from your library against the game.", {
         "name": {"type": "string"},
         "args": {"type": "object", "description": "keyword arguments for the script"},
-        "test": _TEST,
     }, ["name"]),
     _fn("run_code", "Run a one-off Python snippet with `game` in scope "
         "(and `from library.<name> import <name>` available).", {
         "code": {"type": "string"},
-        "test": _TEST,
     }, ["code"]),
     _fn("write_script", "Create or replace a script in your library.", {
         "name": {"type": "string", "description": "lowercase_with_underscores"},
@@ -198,7 +192,6 @@ class Tools:
         self.finished: str | None = None  # set by the finish tool
         self._last_call: str | None = None
         self._repeats = 0
-        self._test_streak = 0
 
     def schemas(self) -> list[dict]:
         return [_SCHEMAS[name] for name in self.allowed]
@@ -239,17 +232,11 @@ class Tools:
         if self._repeats >= REPEAT_NOTE_AT:
             notes.append(f"You've made this exact call {self._repeats} times in a row. "
                          "If it isn't doing what you want, try something different.")
-        if name in ("run_script", "run_code"):
-            self._test_streak = self._test_streak + 1 if _bool(args, "test") else 0
-            if self._test_streak >= TEST_STREAK_NOTE_AT:
-                notes.append(f"That's {self._test_streak} test runs in a row, and test runs "
-                             "never change the game. When something works, run it with "
-                             "test=false to keep its progress.")
         return "".join(f"\nNote: {note}" for note in notes)
 
-    def _game_step_allowed(self, test: bool) -> None:
-        if not test and self.frames_left() == 0:
-            raise ToolError("the frame budget is used up; only test runs are possible")
+    def _game_step_allowed(self) -> None:
+        if self.frames_left() == 0:
+            raise ToolError("the frame budget is used up")
 
     def _budget(self) -> str:
         line = self.run.budget_line()
@@ -264,8 +251,7 @@ class Tools:
     # -- game ---------------------------------------------------------------
 
     def _run_script(self, args: dict) -> ToolResult:
-        test = _bool(args, "test")
-        self._game_step_allowed(test)
+        self._game_step_allowed()
         script_args = args.get("args") or {}
         if isinstance(script_args, str):
             try:
@@ -275,19 +261,17 @@ class Tools:
         name = _str(args, "name")
         if self.scripts is not None and name not in self.scripts:
             raise ToolError(f"you may only run these scripts: {', '.join(self.scripts)}")
-        trace = self.run.run_script(name, script_args, test=test, agent=self.agent,
-                                    max_frames=self._cap())
+        trace = self.run.run_script(name, script_args, agent=self.agent, max_frames=self._cap())
         return self._trace_result(trace)
 
     def _run_code(self, args: dict) -> ToolResult:
-        test = _bool(args, "test")
-        self._game_step_allowed(test)
-        trace = self.run.run_code(_str(args, "code"), test=test, agent=self.agent,
-                                  max_frames=self._cap())
+        self._game_step_allowed()
+        trace = self.run.run_code(_str(args, "code"), agent=self.agent, max_frames=self._cap(),
+                                  snippet=True)
         return self._trace_result(trace)
 
     def _press(self, args: dict) -> ToolResult:
-        self._game_step_allowed(False)
+        self._game_step_allowed()
         button = args.get("button")
         if button not in BUTTONS:
             raise ToolError(f"button must be one of {', '.join(BUTTONS)}")
@@ -302,7 +286,7 @@ class Tools:
         return self._trace_result(trace)
 
     def _wait(self, args: dict) -> ToolResult:
-        self._game_step_allowed(False)
+        self._game_step_allowed()
         frames = _int(args, "frames", None, 1, 3_600)
         limit = min(self.frames_left(), self.run.config.step.max_frames)
         shortened = frames > limit

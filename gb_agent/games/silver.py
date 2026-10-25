@@ -1,6 +1,6 @@
 """Pokemon Silver (USA, Europe).
 
-The ROM isn't in the repo; it lives at ``<data dir>/gb_agent/roms/``.
+The ROM isn't in the repo; it lives in ``roms/`` under ``gb_agent.paths.gb_agent_dir()``.
 
 Runs start in the player's bedroom, just after new-game setup. ``SETUP`` is the
 input sequence that gets there from power-on, played once by hand (2026-10-21,
@@ -23,7 +23,7 @@ and has to find its own. (0xD20D/0xD20E hold the player's X/Y plus 4.)
 
 from pathlib import Path
 
-from util.paths import data_path
+from gb_agent.paths import gb_agent_path
 
 from gb_agent.games.profile import GameProfile, MemRef
 
@@ -44,9 +44,9 @@ SETUP = (
 
 SILVER = GameProfile(
     name="silver",
-    rom=data_path("gb_agent", "roms", "pokemon_silver.gbc"),
-    power_on_state=data_path("gb_agent", "states", "silver_power_on.state"),
-    start_state=data_path("gb_agent", "states", "silver_bedroom.state"),
+    rom=gb_agent_path("roms", "pokemon_silver.gbc"),
+    power_on_state=gb_agent_path("states", "silver_power_on.state"),
+    start_state=gb_agent_path("states", "silver_bedroom.state"),
     setup=SETUP,
     progress_values={
         "map_group": MemRef(0xDA00),  # 24 in the player's house

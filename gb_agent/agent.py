@@ -42,7 +42,7 @@ you're expected to play:
 - Write your first script early, even a small one, and run it.
 - If you've done the same thing by hand twice, turn it into a script.
 - If a script doesn't do what you expected, read its report, fix it with \
-write_script, and try again with test=true.
+write_script, and run it again. Every run counts: there's no undo.
 Pressing buttons directly is fine for a quick look, but don't play that way for long."""
 
 SUB_INTRO = """\
@@ -68,8 +68,8 @@ with a docstring, for example:
 Scripts can use each other: `from library.walk_left import walk_left`.
 
 After each step you get a report (what happened, inputs used, how much of the screen \
-changed, notes, errors) and a screenshot. Use test=true on run_script or run_code to \
-try something and throw the result away: it costs no frames. Kept steps spend frames."""
+changed, notes, errors) and a screenshot. Every step that touches the game is kept and \
+spends frames."""
 
 MAIN_CONTEXT = """\
 Your context is limited. When it fills up it's cleared: you'll be asked for a quick \
@@ -83,7 +83,7 @@ You can also make sub-agents: helpers you design with define_subagent (instructi
 some of your tools, which scripts they may run) and give one job at a time with \
 run_subagent. A sub-agent starts with a fresh context and only its summary comes \
 back, so long or fiddly jobs (getting through a conversation, reaching a place, \
-testing a script until it works) don't fill up your own context. Write clear \
+getting a script to work) don't fill up your own context. Write clear \
 instructions: it knows nothing except what you tell it."""
 
 EVERY_REPLY = """\

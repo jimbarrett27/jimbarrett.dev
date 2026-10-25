@@ -7,6 +7,8 @@ Layout of a library repo:
 
     subagents/<name>.json  one sub-agent spec each (see gb_agent/subagents.py)
 
+    snippets/stepNNNNN.py  the agent's one-off code (run_code), one file per step
+
 Scripts are mounted read-only into the sandbox, where they import each other as
 ``from library.walk_to import walk_to``. Being a package, a script can't shadow a
 standard-library module by its name.
@@ -36,6 +38,7 @@ from pathlib import Path
 
 PACKAGE = "library"
 SUBAGENTS = "subagents"  # sub-agent specs, as <name>.json; never mounted into the sandbox
+SNIPPETS = "snippets"  # one-off code, kept for analysis; never mounted, never importable
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 VERSION_RE = re.compile(r"^[0-9a-f]{7,40}$")
 MAX_SCRIPT_BYTES = 64_000
@@ -223,6 +226,24 @@ class Library:
         path.write_text(text)
         self._commit(reason + _trailers(agent, run, step))
         return self.subagent_version(name), True
+
+    # -- snippets -----------------------------------------------------------
+
+    def write_snippet(self, code: str, *, step: int, agent: str | None = None,
+                      run: str | None = None) -> str:
+        """Keep one-off ``code`` run at ``step``; return the version that holds it.
+
+        Nothing checks it's a script: snippets run as they are, and are only kept so
+        a run's history holds all the code the agent ran, not just its scripts.
+        """
+        if not isinstance(code, str) or len(code.encode()) > MAX_SCRIPT_BYTES:
+            raise ScriptError(f"code must be text of at most {MAX_SCRIPT_BYTES} bytes")
+        relpath = f"{SNIPPETS}/step{step:05d}.py"
+        path = self.root / relpath
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(code)
+        self._commit(f"One-off code at step {step}" + _trailers(agent, run, step))
+        return self._last_commit(relpath)
 
     # -- writing ------------------------------------------------------------
 

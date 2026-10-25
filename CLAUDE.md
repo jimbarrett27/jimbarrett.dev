@@ -31,6 +31,11 @@ repo root, exactly where these files have always lived. Alembic honours the same
 variable via each `migrations/env.py`, so migrations and the app never disagree
 about which file they mean.
 
+`gb_agent` is the exception: its ROMs, start states and runs resolve through
+`gb_agent.paths` (`gb_agent_path`), which honours `GB_AGENT_DIR` first. On the server
+that's `/mnt/storage/data/gb_agent` on the 4 TB disk, set in `~/.bashrc`; unset, it
+falls back to `gb_agent/` under the data dir.
+
 ## Website (`website/`)
 
 Angular 21 SPA deployed to Google App Engine. See `website/CLAUDE.md` for the full
