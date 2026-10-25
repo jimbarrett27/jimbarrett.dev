@@ -27,7 +27,9 @@ video { display: block; width: 100%; aspect-ratio: 10 / 9; image-rendering: pixe
 
 .panel { border-radius: 8px; padding: 1rem; display: flex; flex-direction: column; gap: .75rem; }
 h2 { font-size: .875rem; font-weight: 400; letter-spacing: .05em; color: var(--color-gray); }
-.log ol { list-style: none; margin: 0; display: flex; flex-direction: column; gap: .9rem; font-size: .875rem; }
+/* newest first, so the latest turn stays in view at the top; the rest scrolls */
+.log ol { list-style: none; margin: 0; display: flex; flex-direction: column; gap: .9rem; font-size: .875rem;
+  max-height: 70vh; overflow-y: auto; overscroll-behavior: contain; padding-right: .5rem; }
 .log li, .log p { margin: 0; }
 .said { color: #6d28d9; }
 .result { padding-left: .9rem; }
