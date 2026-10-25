@@ -184,4 +184,4 @@ def test_items_money_and_battles_in_the_changes():
 def test_no_changes_line_without_a_before():
     text = describe(None, _obs())
     assert not text.startswith("Changes") and text.startswith("Where: Players House 2F")
-    assert "Exits: (7, 0) to Players House 1F, 3 up, 4 right" in text
+    assert "Exits: to Players House 1F at (7, 0) (from you: 3 up, 4 right)" in text
