@@ -4,8 +4,9 @@ A trace is a short text report plus a few images (the screen before, some
 keyframes, the screen after). The text is cut to a character budget, so it fits
 a small model's context; the full detail stays in the run directory.
 
-Memory only appears if the agent asked to watch it. The game profile's
-``progress_values`` are for scoring and never come through here.
+After a kept step the game profile's description of the game state (``state``)
+goes near the top, outside the budget: it's what the agent most needs, and it's
+already short. Memory only appears if the agent asked to watch it.
 """
 
 from collections import Counter
@@ -33,6 +34,7 @@ class Trace:
     images: list[tuple[str, bytes]] = field(default_factory=list)  # (caption, png)
     screen_change: float | None = None  # share of pixels that differ, before vs after
     problem: str = ""
+    state: str = ""  # the game profile's description of the state after the step
 
     @property
     def frames(self) -> int:
@@ -46,6 +48,9 @@ class Trace:
             head.append(f"problem: {self.problem}")
         if self.inputs:
             head.append(f"inputs: {self.inputs}")
+        if self.state:
+            head.append(self.state)
+            budget += len(self.state) + 1
         if self.screen_change is not None:
             head.append(f"screen: {describe_change(self.screen_change)}")
         if self.value is not None:

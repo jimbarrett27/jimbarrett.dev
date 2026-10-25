@@ -92,9 +92,15 @@ reply as the tool call."""
 
 
 def system_prompt(notes: str, *, instructions: str | None = None,
-                  subagents: bool = False) -> str:
-    """The main agent's system prompt, or a sub-agent's when given its instructions."""
+                  subagents: bool = False, state_help: str = "") -> str:
+    """The main agent's system prompt, or a sub-agent's when given its instructions.
+
+    ``state_help`` explains the game-state description at the top of each report,
+    if the run has one.
+    """
     parts = [SUB_INTRO if instructions else MAIN_INTRO, GAME_API.format(buttons=", ".join(BUTTONS))]
+    if state_help:
+        parts.append(state_help)
     if not instructions:
         parts.append(MAIN_CONTEXT)
         if subagents:
@@ -183,7 +189,8 @@ class GameAgent:
         self.calls = 0  # this agent's own LLM calls
         self.system = SystemMessage(system_prompt(
             run.game.notes, instructions=instructions,
-            subagents="run_subagent" in self.tools.allowed))
+            subagents="run_subagent" in self.tools.allowed,
+            state_help=run.game.state_help if run.reports_state else ""))
         self.messages: list[AnyMessage] = []
         self.context_tokens = 0  # as of the last call
         self.compactions = 0
@@ -197,6 +204,7 @@ class GameAgent:
                     "Call finish when you're done.")
             if notes:
                 text += f"\n\nYour notes from earlier in this job:\n{notes}"
+            text += self._state_now()
             return [self.system, self._with_screens(text, [
                 (f"the screen now (frame {self.run.frame})", self.run.screenshot_png())])]
         c = self.run.config
@@ -213,8 +221,13 @@ class GameAgent:
                    if not self.run.notes and "run_subagent" in self.tools.allowed else ""))
         if self.run.notes:
             text += f"\n\nYour notes (kept across context clears):\n{self.run.notes}"
+        text += self._state_now()
         return [self.system, self._with_screens(text, [
             (f"the screen now (frame {self.run.frame})", self.run.screenshot_png())])]
+
+    def _state_now(self) -> str:
+        state = self.run.state_text()
+        return f"\n\nThe game now:\n{state}" if state else ""
 
     def _with_screens(self, text: str, images: list[tuple[str, bytes]]) -> HumanMessage:
         images = images[-self.profile.images_per_step:] if self.profile.images_per_step else []

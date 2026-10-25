@@ -18,8 +18,9 @@ The bucket layout is the website's contract (``gb-agent.interface.ts``):
 ``live.json`` carries ``notes_version`` and ``scripts_version`` so the page only
 refetches those two when they change. Only the newest ``--keep-minutes`` of game
 time stays in the bucket; every clip is also kept in ``<run>/clips/`` at home, so
-the run directory remains the full record. Progress values (map, position) are
-never published, nor are states, events or the ROM.
+the run directory remains the full record. Tool results go out as the agent saw
+them, so the game-state description (map, position, party) is public too; save
+states, events and the ROM never are.
 """
 
 import argparse

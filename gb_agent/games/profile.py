@@ -1,13 +1,18 @@
 """Everything game-specific, behind one dataclass.
 
 The rest of gb_agent only knows about buttons, frames, the screen and memory, so
-adding a game means writing a profile, not changing the harness. Whether the
+adding a game means writing a profile, not changing the harness. A profile may also
+describe the game state to the agent (``observe``/``describe``), read host-side
+after each kept step; without them the agent only gets screenshots. Whether the
 cartridge has a clock (and so needs locking) is read from the ROM header, not
 declared here.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from pyboy import PyBoy
 
 from gb_agent.emulator import RecordingGame, boot, power_on_state, save_state
 
@@ -50,6 +55,12 @@ class GameProfile:
     progress_values: dict[str, MemRef] = field(default_factory=dict)
     seed_library: Path | None = None  # scripts copied into each new run's library
     notes: str = ""  # game facts given to the agent
+    # The state report: observe(pyboy) -> JSON-able dict, kept with each step;
+    # describe(before, after, pressed buttons) -> the text at the top of a report
+    # (before is None for a plain description); state_help explains it in the prompt.
+    observe: Callable[[PyBoy], dict] | None = None
+    describe: Callable[[dict | None, dict, list[str]], str] | None = None
+    state_help: str = ""
 
     def rom_bytes(self) -> bytes:
         if not self.rom.exists():

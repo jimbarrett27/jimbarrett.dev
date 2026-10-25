@@ -8,6 +8,7 @@ limits on LLM calls, tokens and time. A ``Run`` carries it out and records it:
       events.jsonl       every input and frame tick, tagged with step/agent/script/version
       steps.jsonl        every step: what ran, kept or not, frames, the trace text
       progress.jsonl     the game profile's progress values after every kept step
+                         (steps.jsonl also has the game's described state, if it has one)
       agents.jsonl       every LLM call and tool result
       blockers.jsonl     report_blocker calls
       frames/            screenshots per step
@@ -59,6 +60,8 @@ class ExperimentConfig:
     step: StepLimits = field(default_factory=lambda: StepLimits(max_frames=STEP_FRAMES))
     notify: bool = True
     allow_paid: bool = False  # may sub-agents use paid (OpenRouter) models?
+    # Describe the game state at the top of every report, if the game profile can.
+    state_report: bool = True
 
 
 def new_run_id(config: ExperimentConfig) -> str:
@@ -104,7 +107,8 @@ class Run:
         self.started = time.monotonic()
         self.started_at = datetime.now(timezone.utc).isoformat()
         self.stop_reason: str | None = None
-        self._log_progress()
+        self.observation: dict | None = None  # the game state after the last kept step
+        self._after_kept()
         self.save_manifest()
 
     # -- budget -------------------------------------------------------------
@@ -187,7 +191,11 @@ class Run:
             self.frame = outcome.end_frame
             self.kept_steps += 1
             (self.dir / "states" / f"step{step:05d}.state").write_bytes(self.state)
-            self._log_progress()
+            before = self.observation
+            self._after_kept()
+            if self.reports_state and self.observation is not None:
+                pressed = [e["button"] for e in outcome.events if e["type"] == "press"]
+                trace.state = self.game.describe(before, self.observation, pressed)
 
         logger.info("step %d %s: %s, frames %d→%d, %s", step, trace.title, outcome.sandbox.status,
                     outcome.start_frame, outcome.end_frame, "kept" if kept else "not kept")
@@ -197,10 +205,21 @@ class Run:
             "status": outcome.sandbox.status, "verified": outcome.verified,
             "start_frame": outcome.start_frame, "end_frame": outcome.end_frame,
             "frames": outcome.frames_used, "problem": outcome.problem,
+            "observation": self.observation if kept and self.reports_state else None,
             "trace": trace.to_text(budget=20_000), "time": time.time(),
         })
 
     # -- looking without advancing ------------------------------------------
+
+    @property
+    def reports_state(self) -> bool:
+        return self.config.state_report and self.game.observe is not None
+
+    def state_text(self) -> str:
+        """The game's state as the agent sees it at the top of a report, or ""."""
+        if not self.reports_state or self.observation is None:
+            return ""
+        return self.game.describe(None, self.observation, [])
 
     def screenshot_png(self) -> bytes:
         from gb_agent.emulator import RecordingGame
@@ -230,8 +249,10 @@ class Run:
 
     # -- records ------------------------------------------------------------
 
-    def _log_progress(self) -> None:
-        if not self.game.progress_values:
+    def _after_kept(self) -> None:
+        """Read the new state once: progress values for scoring, and the game state
+        the agent is told about. A failed observation costs the report, not the run."""
+        if not self.game.progress_values and not self.reports_state:
             return
         pyboy = boot(self.rom, self.state)
         try:
@@ -241,10 +262,17 @@ class Run:
                     else (lambda a, b=ref.bank: pyboy.memory[b, a])
                 bytes_ = [read(a) for a in range(ref.addr, ref.addr + ref.length)]
                 values[label] = bytes_[0] if ref.length == 1 else bytes_
+            if self.reports_state:
+                try:
+                    self.observation = self.game.observe(pyboy)
+                except Exception:
+                    logger.exception("step %d: couldn't read the game state", self.step)
+                    self.observation = None
         finally:
             pyboy.stop(save=False)
-        _jsonl(self.dir / "progress.jsonl", {"step": self.step, "frame": self.frame,
-                                             "values": values})
+        if values:
+            _jsonl(self.dir / "progress.jsonl", {"step": self.step, "frame": self.frame,
+                                                 "values": values})
 
     def set_notes(self, notes: str, agent: str) -> None:
         self.notes = notes

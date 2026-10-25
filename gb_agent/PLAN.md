@@ -182,6 +182,15 @@ traces only include memory the agent has chosen to watch. So finding its own pos
 in RAM is part of the task. A per-experiment hints switch (pre-watched addresses, an
 example script that reads them) can be added later to compare the two.
 
+**Superseded 2026-10-25: the game state is described in every report.** No model
+ever found its position in RAM (`watch_memory` was used once across all runs), so
+the profile now describes the game after each kept step: map, position, on-screen
+text, people, exits, a grid of the screen, party, bag and battle, read with
+addresses from the pret/pokegold disassembly (`games/silver_state.py`). The agent
+still navigates on its own (no provided `walk_to`); `--no-state-report` gives the
+old screenshots-only behaviour for comparison. Design doc: "gb_agent state harness:
+design" (claude.ai artifact).
+
 **Game-agnostic helpers are fine (decided 2026-10-21).** Small local models couldn't
 tell whether an action did anything (Silver's first tap in a new direction only turns
 the player: 0.5% of pixels). So every report says how much of the screen changed, in

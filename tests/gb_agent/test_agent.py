@@ -345,3 +345,37 @@ def test_budget_used_up_refuses_steps(make_run):
     assert tools.call("wait", {"frames": 5}).text.startswith("Error: the frame budget")
     assert tools.call("run_code", {"code": "game.tick(5)"}).text.startswith(
         "Error: the frame budget")
+
+
+def _reporting(game):
+    """The test profile, describing the game as one byte of work RAM."""
+    return replace(game, observe=lambda pyboy: {"wram0": pyboy.memory[0xC000]},
+                   describe=lambda before, after, pressed: (
+                       f"State: wram0 {after['wram0']}"
+                       + (f" (was {before['wram0']}; pressed {pressed})" if before else "")),
+                   state_help="STATE HELP: what the state lines mean.")
+
+
+def test_reports_start_with_the_game_state(tmp_path, game, image):
+    config = ExperimentConfig(game="test", model="qwen3-vl-2b-local", goal="test",
+                              frame_budget=300, max_llm_calls=10, notify=False)
+    run = Run(config, root=tmp_path / "runs", game=_reporting(game), image=image)
+    _, model, _ = play(run, [say(call("press", button="a")), say(call("wait", frames=10))])
+    system, opening = model.seen[0][0].content, model.seen[0][1].content
+    assert "STATE HELP" in system
+    assert "The game now:\nState: wram0" in opening[0]["text"]
+    assert "State: wram0" in tool_texts(model)[0] and "pressed ['a']" in tool_texts(model)[0]
+    steps = jsonl(run, "steps.jsonl")
+    assert all("wram0" in s["observation"] for s in steps)
+    assert "State: wram0" in steps[0]["trace"]
+
+
+def test_the_state_report_can_be_turned_off(tmp_path, game, image):
+    config = ExperimentConfig(game="test", model="qwen3-vl-2b-local", goal="test",
+                              frame_budget=300, max_llm_calls=10, notify=False,
+                              state_report=False)
+    run = Run(config, root=tmp_path / "runs", game=_reporting(game), image=image)
+    _, model, _ = play(run, [say(call("wait", frames=10))])
+    assert "STATE HELP" not in model.seen[0][0].content
+    assert "State:" not in tool_texts(model)[0]
+    assert jsonl(run, "steps.jsonl")[0]["observation"] is None

@@ -98,3 +98,15 @@ def test_screen_change_appears_in_the_report():
     trace = Trace(title="t()", status="ok", usable=True, start_frame=0, end_frame=1,
                   screen_change=0.005)
     assert "screen: a tiny part of the screen changed" in trace.to_text()
+
+
+def test_the_game_state_goes_near_the_top_and_outside_the_budget():
+    state = "Where: Players House 2F, you're at (3, 3)\n" + "Map around you:\n  ....@....\n" * 20
+    trace = Trace(title="walk @ abc1234", status="ok", usable=True, start_frame=0, end_frame=8,
+                  inputs="down ×1", stdout="x" * 5_000, stdout_bytes=5_000, state=state)
+    text = trace.to_text(budget=600)
+    lines = text.splitlines()
+    assert lines[2] == "inputs: down ×1" and lines[3] == "Where: Players House 2F, you're at (3, 3)"
+    assert state in text
+    assert "printed" in text  # still room for the rest of the report
+    assert len(text) <= 600 + len(state) + 1
