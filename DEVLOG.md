@@ -4,6 +4,34 @@ Decisions and milestones for this repo, newest first. One `### entry` per decisi
 milestone under a `## YYYY-MM-DD` date header — capture the *why*, not just the *what*.
 Maintained via the `/devlog` skill. (Format mirrors `SignalAgents/RESEARCH_LOG.md`.)
 
+## 2026-10-25
+
+### gb_agent drops test runs and keeps all the agent's code; runs move to the 4 TB disk
+
+Jim decided the agent should live with its actions: `test` is gone from `run_script`
+and `run_code`, so every step that runs and verifies is kept and spends frames. The
+test-streak note and the prompt's "try again with test=true" went with it
+(`gb_agent/tools.py`, `run.py`, `agent.py`). Little is lost: across the last 15 runs,
+0–4 calls per run were test runs. One-off code had the opposite problem. Gemma's long
+runs made 128 and 172 `run_code` calls whose code existed only in the logs, so each
+snippet is now committed to the run library's `snippets/stepNNNNN.py` before it runs,
+and its version tags the step and its events. Snippets are never mounted or importable,
+so they don't clutter `list_scripts`. Auto-saving was chosen over removing `run_code`,
+which would have cost an extra call for every one-off. `press` and `wait` are
+harness-written and aren't saved.
+
+The default step timeout is now 300 s (it was 60 s). It only catches code that spins
+without ticking, since the 600-frame cap stops everything else, and no step in any run
+has ever hit it.
+
+Runs, the ROM and start states now resolve through `gb_agent/paths.py`. Its
+`GB_AGENT_DIR` takes precedence over `JIMBARRETT_DATA_DIR`, so the large, churning run
+data can sit on `/mnt/storage` while the bots' SQLite stays on the NVMe. The 552 MB of
+existing runs moved to `/mnt/storage/data/gb_agent`, and `~/.bashrc` exports the
+variable. Until then the data had been landing inside the checkout, because interactive
+shells never set a data dir. Giving the agent hints, such as its position, is next, but
+the form it takes is still open for a longer discussion.
+
 ## 2026-10-22
 
 ### Six hour-long Gemma runs never leave the house; Haiku with notes reaches Route 29

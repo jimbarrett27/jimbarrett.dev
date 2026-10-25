@@ -3,7 +3,7 @@
 Both go through ``steps.run_step`` with the library mounted, so one-off code can
 import library scripts too, and both come back as a ``StepOutcome`` plus the
 ``Trace`` the agent is shown. Neither commits anything: the caller decides
-whether a step's state is kept (a test run just throws it away).
+whether a step's state is kept (one that didn't verify never is).
 """
 
 import json

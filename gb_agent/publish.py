@@ -35,7 +35,7 @@ from typing import Protocol
 from gb_agent.games import GAMES
 from gb_agent.library import Library
 from gb_agent.replay import FPS, render_video
-from util.paths import data_path
+from gb_agent.paths import gb_agent_path
 
 logger = logging.getLogger(__name__)
 
@@ -364,7 +364,7 @@ def main(argv=None) -> int:
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     dest = (GCSDestination(args.dest.removeprefix("gs://")) if args.dest.startswith("gs://")
             else LocalDestination(Path(args.dest)))
-    root = Path(data_path("gb_agent", "runs"))
+    root = Path(gb_agent_path("runs"))
     follow = args.run == "latest"
     publisher: RunPublisher | None = None
     try:

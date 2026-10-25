@@ -12,12 +12,14 @@ limits on LLM calls, tokens and time. A ``Run`` carries it out and records it:
       blockers.jsonl     report_blocker calls
       frames/            screenshots per step
       states/            start state, then the state after each kept step
-      library/           the run's script library (its own git repo)
+      library/           the run's script library and snippets (its own git repo)
       script_usage.jsonl
       run.mp4            if rendered
 
-Only kept steps spend the frame budget. A test step runs the same way but its
-result is thrown away; a step whose record didn't verify is never kept.
+Every step that ran and verified is kept and spends the frame budget; there are no
+test runs. A step whose record didn't verify is never kept. The agent's one-off
+code is committed to the library's ``snippets/`` before it runs, so the library
+holds every piece of code the agent ran.
 """
 
 import json
@@ -35,7 +37,7 @@ from gb_agent.models import get_profile
 from gb_agent.scripts import run_code, run_script
 from gb_agent.steps import StepLimits, StepOutcome, validate_watch
 from gb_agent.trace import Trace
-from util.paths import data_path
+from gb_agent.paths import gb_agent_path
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +79,7 @@ class Run:
         self.game = game or GAMES[config.game]
         self.model = get_profile(config.model)
         self.id = run_id or new_run_id(config)
-        self.dir = Path(root or data_path("gb_agent", "runs")) / self.id
+        self.dir = Path(root or gb_agent_path("runs")) / self.id
         self.image = image
         self.dir.mkdir(parents=True, exist_ok=False)
         for sub in ("frames", "states"):
@@ -135,44 +137,42 @@ class Run:
 
     # -- steps --------------------------------------------------------------
 
-    def _limits(self, test: bool, max_frames: int | None = None) -> StepLimits:
-        """Step limits; a kept step can't pass the budget (or ``max_frames``, if given)."""
+    def _limits(self, max_frames: int | None = None) -> StepLimits:
+        """Step limits; a step can't pass the budget (or ``max_frames``, if given)."""
         step = self.config.step
-        if test:
-            return step
         cap = self.frames_left if max_frames is None else min(self.frames_left, max_frames)
         return replace(step, max_frames=min(step.max_frames, cap))
 
-    def run_script(self, name: str, args: dict | None, *, test: bool = False,
-                   agent: str = "main", max_frames: int | None = None) -> Trace:
+    def run_script(self, name: str, args: dict | None, *, agent: str = "main",
+                   max_frames: int | None = None) -> Trace:
         self.step += 1
         outcome, trace, version = run_script(
             self.library, name, args, rom_path=self.game.rom, state=self.state,
-            start_frame=self.frame, watch=self.watch, limits=self._limits(test, max_frames),
+            start_frame=self.frame, watch=self.watch, limits=self._limits(max_frames),
             image=self.image)
-        self._finish_step(outcome, trace, test=test, agent=agent, script=name,
-                          version=version, args=args)
+        self._finish_step(outcome, trace, agent=agent, script=name, version=version, args=args)
         return trace
 
-    def run_code(self, code: str, *, test: bool = False, agent: str = "main",
-                 title: str | None = None, max_frames: int | None = None) -> Trace:
+    def run_code(self, code: str, *, agent: str = "main", title: str | None = None,
+                 max_frames: int | None = None, snippet: bool = False) -> Trace:
+        """Run one-off code; ``snippet``: it's the agent's, so keep it in the library."""
         self.step += 1
+        version = (self.library.write_snippet(code, step=self.step, agent=agent, run=self.id)
+                   if snippet else None)
         outcome, trace = run_code(self.library, code, rom_path=self.game.rom, state=self.state,
                                   start_frame=self.frame, watch=self.watch,
-                                  limits=self._limits(test, max_frames), image=self.image)
+                                  limits=self._limits(max_frames), image=self.image)
         if title:
             trace.title = title
-        self._finish_step(outcome, trace, test=test, agent=agent, code=code)
+        self._finish_step(outcome, trace, agent=agent, version=version, code=code)
         return trace
 
-    def _finish_step(self, outcome: StepOutcome, trace: Trace, *, test: bool, agent: str,
+    def _finish_step(self, outcome: StepOutcome, trace: Trace, *, agent: str,
                      script: str | None = None, version: str | None = None,
                      args: dict | None = None, code: str | None = None) -> None:
-        kept = outcome.usable and not test
+        kept = outcome.usable
         step = self.step
-        if test:
-            trace.title += " [test run: not kept]"
-        elif not outcome.usable:
+        if not kept:
             trace.title += " [not kept]"
 
         for i, (caption, png) in enumerate(trace.images):
@@ -192,7 +192,7 @@ class Run:
         logger.info("step %d %s: %s, frames %d→%d, %s", step, trace.title, outcome.sandbox.status,
                     outcome.start_frame, outcome.end_frame, "kept" if kept else "not kept")
         _jsonl(self.dir / "steps.jsonl", {
-            "step": step, "agent": agent, "kept": kept, "test": test,
+            "step": step, "agent": agent, "kept": kept,
             "script": script, "version": version, "args": args, "code": code,
             "status": outcome.sandbox.status, "verified": outcome.verified,
             "start_frame": outcome.start_frame, "end_frame": outcome.end_frame,

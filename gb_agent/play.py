@@ -28,9 +28,10 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--max-calls", type=int, default=300, help="LLM calls")
     p.add_argument("--max-tokens", type=int, default=5_000_000)
     p.add_argument("--max-minutes", type=float, default=240)
-    p.add_argument("--step-timeout", type=float, default=60, help="seconds per sandbox step")
+    # A backstop for code that spins without ticking; the frame cap stops the rest.
+    p.add_argument("--step-timeout", type=float, default=300, help="seconds per sandbox step")
     p.add_argument("--step-frames", type=int, default=STEP_FRAMES,
-                   help="most frames one kept step may use")
+                   help="most frames one step may use")
     p.add_argument("--video", action="store_true", help="render run.mp4 at the end")
     p.add_argument("--publish", action="store_true",
                    help="publish the run live for the website as it goes (gb_agent.publish)")
