@@ -1,0 +1,300 @@
+# Inputs from a Claude Haiku run (20261022-065249), kept steps 1-300, replayed from
+# SILVER's start state: +button press, -button release, tN advance N frames.
+1 +down t8 -down t8 +down t8 -down t8
+2 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+3 +down t8 -down t8 +down t8 -down t8
+4 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+5 +down t8 -down t8 +down t8 -down t8
+6 +down t8 -down t8 +down t8 -down t8
+7 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+9 +left t8 -left t8
+10 +up t8 -up t8
+11 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +down t8 -down t8 +down t8 -down t8
+12 +down t8 -down t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+13 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+14 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+15 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+16 +left t8 -left t8 +left t8 -left t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+17 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+18 +right t8 -right t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+19 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+20 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +a t60 -a t1
+21 +up t8 -up t12 +up t8 -up t12 +up t8 -up t12 +up t8 -up t12 +left t8 -left t12 +left t8 -left t12 +left t8 -left t12 +left t8 -left t12 +left t8 -left t12 +left t8 -left t12 +down t8 -down t12 +down t8 -down t12 +down t8 -down t12 +left t8 -left t12 +left t8 -left t12 t30
+23 +left t8 -left t8 +left t8 -left t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 t30
+24 +down t8 -down t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +up t8 -up t8 t30
+25 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 t30
+26 +down t8 -down t20 t30
+27 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +a t4 -a t30 t60
+28 +a t8 -a t60
+29 +a t8 -a t90
+30 +a t8 -a t90
+31 +a t8 -a t90
+32 +a t8 -a t60
+33 +a t8 -a t90
+34 +a t8 -a t90
+35 +a t8 -a t90
+36 +a t8 -a t120
+37 +a t8 -a t120
+38 +a t8 -a t120
+39 +a t8 -a t120
+40 +b t8 -b t120
+41 +a t8 -a t180
+42 +a t8 -a t180
+43 +a t8 -a t180
+44 +a t8 -a t180
+45 +a t8 -a t180
+46 +a t8 -a t180
+47 +a t8 -a t180
+48 +down t8 -down t30
+49 +a t8 -a t180
+50 +a t8 -a t180
+51 +a t8 -a t180
+52 +a t8 -a t180
+53 +a t8 -a t180
+54 +a t8 -a t180
+55 +a t8 -a t180
+56 +a t8 -a t180
+57 +a t8 -a t180
+58 +a t8 -a t180
+59 +a t8 -a t180
+60 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+61 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+62 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+63 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+64 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+65 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+66 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+67 +down t8 -down t8 +down t8 -down t8
+68 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+69 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+70 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+71 +down t8 -down t30
+72 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+73 +down t8 -down t8 +down t8 -down t8
+74 +right t8 -right t8 +right t8 -right t8
+75 +down t8 -down t8 +down t8 -down t8
+76 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+77 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+78 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+79 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+80 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+81 +right t8 -right t8 +right t8 -right t8
+82 +down t8 -down t8 +down t8 -down t8
+83 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+84 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+85 +right t8 -right t8 +right t8 -right t8
+86 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+87 +up t8 -up t8
+88 t60
+89 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+90 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+91 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+92 +down t8 -down t8 +down t8 -down t8
+93 t60
+94 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+95 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+96 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+97 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+98 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+99 +up t8 -up t8
+100 t60
+101 +left t8 -left t8
+102 +down t8 -down t10
+103 +a t8 -a t60
+104 +a t8 -a t120
+105 +a t8 -a t180
+106 +a t8 -a t180
+107 +a t8 -a t180
+108 +a t8 -a t180
+109 +a t8 -a t180
+110 +a t8 -a t180
+111 +a t8 -a t180
+112 +a t8 -a t180
+113 +a t8 -a t180
+114 +a t8 -a t180
+115 +a t8 -a t180
+116 +a t8 -a t180
+117 +a t8 -a t180
+118 +a t8 -a t180
+119 +a t8 -a t180
+120 +a t8 -a t120
+121 +down t8 -down t8
+123 +down t8 -down t8
+124 +right t8 -right t8 +right t8 -right t8
+125 +right t8 -right t8
+126 +right t8 -right t8
+127 +a t8 -a t60
+128 +a t8 -a t120
+129 +b t8 -b t120
+130 +a t8 -a t180
+131 +a t8 -a t180
+132 +a t8 -a t180
+133 +a t8 -a t180
+134 +a t8 -a t180
+135 +a t8 -a t180
+136 +a t8 -a t120
+137 +a t8 -a t120
+138 +down t8 -down t30
+139 +a t8 -a t180
+140 +a t8 -a t180
+141 +a t8 -a t180
+142 +a t8 -a t180
+143 +a t8 -a t180
+144 +a t8 -a t180
+145 +a t8 -a t180
+146 +a t8 -a t180
+147 +a t8 -a t180
+148 +a t8 -a t180
+149 +a t8 -a t120
+150 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+151 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+152 +right t8 -right t8
+153 +left t8 -left t8
+154 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+155 +a t8 -a t180
+156 +a t8 -a t180
+157 +a t8 -a t180
+158 +a t8 -a t180
+159 +b t8 -b t120
+160 +a t8 -a t180
+161 +a t8 -a t180
+162 +a t8 -a t180
+163 +a t8 -a t180
+164 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+165 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+166 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+167 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+168 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+169 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+170 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+171 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+172 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+173 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+174 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+175 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+176 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+177 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+178 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+179 +right t8 -right t8 +right t8 -right t8
+180 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+181 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+182 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+183 +down t8 -down t8 +down t8 -down t8
+184 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+185 +up t8 -up t8 +up t8 -up t8
+186 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+187 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+188 +left t8 -left t8 +left t8 -left t8
+189 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+190 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+191 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+192 +left t8 -left t8 +left t8 -left t8
+193 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+194 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+195 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+196 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+197 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+198 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+199 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+200 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+201 t60
+202 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+203 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+204 +left t8 -left t8 +left t8 -left t8
+205 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+206 +right t8 -right t8 +right t8 -right t8
+207 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+208 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+209 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+210 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+211 +left t8 -left t8 +left t8 -left t8
+212 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+213 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+214 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+215 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+216 +left t8 -left t8 +left t8 -left t8
+217 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+218 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+219 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+220 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+221 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+222 +right t8 -right t8
+223 +up t8 -up t8
+224 +right t8 -right t8 +right t8 -right t8
+225 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+226 +a t8 -a t180
+227 +a t8 -a t120
+228 +a t8 -a t120
+229 +a t8 -a t180
+230 +a t8 -a t180
+231 +a t8 -a t180
+232 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+233 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+234 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+235 +left t8 -left t8 +left t8 -left t8
+236 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+237 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+238 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+239 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+240 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+241 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+242 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+243 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+244 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+245 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+246 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+247 t60
+248 t90
+249 +a t8 -a t180
+250 +a t8 -a t120
+251 +a t8 -a t120
+252 +a t8 -a t120
+253 +a t8 -a t180
+254 +a t8 -a t180
+255 +a t8 -a t180
+256 +a t8 -a t120
+257 +a t8 -a t180
+258 +a t8 -a t180
+259 +a t8 -a t180
+260 +a t8 -a t120
+261 +a t8 -a t180
+262 +a t8 -a t180
+263 +a t8 -a t180
+264 +a t8 -a t120
+265 +a t8 -a t180
+266 +a t8 -a t180
+267 +a t8 -a t180
+268 +a t8 -a t180
+269 +a t8 -a t180
+270 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+271 +down t8 -down t8 +down t8 -down t8 +down t8 -down t8
+272 +down t8 -down t8 +down t8 -down t8
+273 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+274 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+275 +up t8 -up t8 +up t8 -up t8
+276 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+277 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+278 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+279 +up t8 -up t8 +up t8 -up t8
+280 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+281 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+282 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+283 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+284 +left t8 -left t8
+285 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+286 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+287 +down t8 -down t8 +down t8 -down t8
+288 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+289 +up t8 -up t8
+290 +right t8 -right t8 +right t8 -right t8
+291 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+292 +left t8 -left t8 +left t8 -left t8 +left t8 -left t8
+293 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+294 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+295 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+296 +right t8 -right t8 +right t8 -right t8
+297 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8
+298 +right t8 -right t8 +right t8 -right t8 +right t8 -right t8
+299 +left t8 -left t8 +left t8 -left t8
+300 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8 +up t8 -up t8

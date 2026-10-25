@@ -6,6 +6,33 @@ Maintained via the `/devlog` skill. (Format mirrors `SignalAgents/RESEARCH_LOG.m
 
 ## 2026-10-25
 
+### gb_agent describes the game state in every report (Silver, from pret/pokegold)
+
+Screenshots plus self-discovery never got weak models out of the first room: no model
+found its position in RAM, and `watch_memory` was used once in every run. Following
+rs-sdk (agents playing a RuneScape emulator through text state), each kept step's
+report now starts with the game's state: what changed (moved, blocked, turned, new
+text, battle, items), then the map, position, on-screen text, people, exits, things to
+read, a 10×9 grid of the screen, party, bag and battle. Rule: what a player can see or
+would remember, never hidden items, enemy stats or story flags, and facts, not advice.
+Navigation stays the agent's job, and a guide is deferred, so the next runs show how
+far perception alone gets. `--no-state-report` is the old behaviour, as a baseline.
+
+- **Addresses aren't guessed.** pret/pokegold builds a ROM byte-identical to ours
+  (SHA-1 `49b163f7…`), so its symbol file is exact. `games/silver_gen.py` turns a
+  checkout (on the server at `/mnt/storage/data/gb_agent/pokegold`, rgbds 1.0.4 next
+  to it) into the committed `games/silver_data.py`; nothing needs pokegold at runtime.
+- **Two traps found prototyping.** A step can end mid-walk, when `wX/wYCoord` still
+  hold the old tile, so position comes from the player object. And the map block
+  buffer shares memory with a decompression buffer that holds battle graphics as an
+  encounter starts; the game's own four movement bytes are used to detect that, and
+  the report then says the map isn't readable rather than showing junk.
+- **Verified against the game itself.** Tests replay Haiku's real run (inputs in
+  `tests/gb_agent/fixtures/`, not save states, so no game data is committed) and check
+  the computed collision against the game's movement checks at 500+ tiles.
+- **Published.** The block is part of the tool results the live page shows; Jim
+  decided map and position aren't sensitive.
+
 ### gb_agent drops test runs and keeps all the agent's code; runs move to the 4 TB disk
 
 Jim decided the agent should live with its actions: `test` is gone from `run_script`

@@ -38,6 +38,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--no-notify", action="store_true", help="don't send blockers to Telegram")
     p.add_argument("--allow-paid", action="store_true",
                    help="allow a paid (OpenRouter) model, for the agent or its sub-agents")
+    p.add_argument("--no-state-report", action="store_true",
+                   help="don't describe the game state in reports: screenshots only, as "
+                        "before 2026-10-25")
     return p.parse_args(argv)
 
 
@@ -56,6 +59,7 @@ def main(argv=None) -> int:
         step=replace(steps, sandbox=replace(steps.sandbox, timeout_s=args.step_timeout)),
         notify=not args.no_notify,
         allow_paid=args.allow_paid,
+        state_report=not args.no_state_report,
     )
     run = Run(config)
     logging.basicConfig(

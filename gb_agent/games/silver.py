@@ -14,17 +14,17 @@ watching screenshots) and recorded:
 
 The day of the week isn't set yet; Mom asks downstairs.
 
-Memory addresses were found by watching memory while walking around and taking
-the stairs (2026-10-21), not copied from a disassembly (Gold/Silver addresses
-differ from Crystal's). They're progress values only: read by the harness for
-scoring, never shown to the agent. Hints are off, so the agent gets no addresses
-and has to find its own. (0xD20D/0xD20E hold the player's X/Y plus 4.)
+The progress values were first found by watching memory (2026-10-21); they're
+``wMapGroup``, ``wMapNumber``, ``wYCoord`` and ``wXCoord`` in the pret/pokegold
+disassembly, which ``silver_state`` reads everything else from to describe the game
+to the agent after each step (see ``silver_gen`` for where the addresses come from).
 """
 
 from pathlib import Path
 
 from gb_agent.paths import gb_agent_path
 
+from gb_agent.games import silver_state
 from gb_agent.games.profile import GameProfile, MemRef
 
 _A = "a:4:100"
@@ -59,4 +59,7 @@ SILVER = GameProfile(
         "Pokemon Silver for the Game Boy Color. You are SILVER, starting in your "
         "bedroom upstairs at home in New Bark Town. The in-game time is always 10:00."
     ),
+    observe=silver_state.observe,
+    describe=silver_state.describe,
+    state_help=silver_state.STATE_HELP,
 )
