@@ -14,6 +14,8 @@ Map events (exits, signs) and collision are read from the ROM through pointers
 the game keeps in RAM, exactly as the game does when the player moves.
 """
 
+import heapq
+
 from pyboy import PyBoy
 
 from gb_agent.games.silver_data import (
@@ -29,8 +31,11 @@ MAP_BORDER = 3  # blocks of border around the map in wOverworldMapBlocks
 COORD_OFFSET = 4  # object coordinates are stored plus 4
 WALL, WATER = 0x0F, 0x01
 GRASS = {"tall_grass", "long_grass"}
-LEDGES = {"hop_down": "v", "hop_down_left": "v", "hop_down_right": "v",
-          "hop_left": "<", "hop_right": ">"}
+# Ledges, by the one direction they can be jumped
+LEDGES = {"hop_down": "down", "hop_down_left": "down", "hop_down_right": "down",
+          "hop_left": "left", "hop_right": "right"}
+LEDGE_CHARS = {"down": "v", "left": "<", "right": ">"}
+SIDES = {"north": "up", "south": "down", "west": "left", "east": "right"}
 # Things the player can read or check, named by the tile they stand on
 THINGS = {"bookshelf", "pc", "radio", "town_map", "mart_shelf", "tv", "window",
           "incense_burner"}
@@ -39,14 +44,21 @@ STATUS = [(0b111, "asleep"), (1 << 3, "poisoned"), (1 << 4, "burned"), (1 << 5, 
 
 STATE_HELP = """\
 Each report starts with the game's state, read from memory: where you are, what's \
-on screen, the people and exits around you, and your Pokemon. Coordinates are \
-(x, y) tiles on the current map: x counts right from 0, y counts down from 0, so \
-"up" is y - 1. The "Map around you" grid is the area on screen, one character per \
-tile:
+on screen, the people and exits around you, and your Pokemon. "Changes" at the top \
+says what the step did. Coordinates are (x, y) tiles on the current map: x counts \
+right from 0, y counts down from 0, so "up" is y - 1.
+
+Exits, people and map edges each come with a route: the shortest way to walk there \
+from where you stand, around walls and people, as tiles to walk in each direction, \
+e.g. "right 4, up 3" (and "jump down" is one press that hops down a ledge). Follow \
+it in order; walking straight at something usually runs into a wall. People move, \
+so a route to a person can go stale.
+
+The "Map around you" grid is the screen, one character per tile, with x across the \
+top and y down the side:
   @ you    N a person    D an exit (door, stairs, warp)    S something to read or check
   . walkable    g tall grass (wild Pokemon)    ~ water    # blocked
-  v < > a ledge: you can only jump down it in that direction    (blank) off the map
-Exits list where they lead. "Changes" at the top says what this step did."""
+  v < > a ledge: you can only jump down it in that direction    (blank) off the map"""
 
 
 # -- reading -----------------------------------------------------------------
@@ -136,8 +148,9 @@ def _tile(collision: int) -> tuple[str, str]:
     """A collision type as a grid character and a name."""
     name = COLLISION.get(collision, "")
     permission = COLLISION_PERMISSIONS[collision] & 0x0F
-    char = LEDGES.get(name) or ("g" if name in GRASS else "~" if permission == WATER
-                                else "#" if permission == WALL else ".")
+    ledge = LEDGES.get(name)
+    char = (LEDGE_CHARS[ledge] if ledge else "g" if name in GRASS else "~" if permission == WATER
+            else "#" if permission == WALL else ".")
     return char, name.replace("_", " ") or {"~": "water", "#": "wall"}.get(char, "floor")
 
 
@@ -176,6 +189,132 @@ def _map_loaded(pb: PyBoy, x: int, y: int, exits: list[dict]) -> bool:
     compared = [(_collision(pb, x + dx, y + dy), _u8(pb, f"wTile{d.title()}"))
                 for d, (dx, dy) in STEP.items() if 0 <= x + dx < width and 0 <= y + dy < height]
     return not compared or any(ours == theirs for ours, theirs in compared)
+
+
+def _connections(pb: PyBoy) -> dict[str, str]:
+    """The maps joined to this one's edges (outdoors), by side."""
+    out = {}
+    for side in SIDES:
+        group = _u8(pb, f"w{side.title()}ConnectedMapGroup")
+        if group != 0xFF:  # no connection that way
+            out[side] = map_name(group, _u8(pb, f"w{side.title()}ConnectedMapNumber"))
+    return out
+
+
+class _Walker:
+    """Shortest walks on the current map, by the game's movement rules: land tiles
+    only, ledges jumped one way, people in the way, and exits only as destinations
+    (stepping onto one warps you)."""
+
+    def __init__(self, pb: PyBoy, people: list[dict], exits: list[dict]):
+        self.pb = pb
+        self.width, self.height = _u8(pb, "wMapWidth") * 2, _u8(pb, "wMapHeight") * 2
+        self.people = {(p["x"], p["y"]) for p in people}
+        self.exits = {(e["x"], e["y"]) for e in exits}
+        self.kinds: dict[tuple[int, int], str] = {}
+
+    def kind(self, x: int, y: int) -> str:
+        """"land", "blocked", or the direction a ledge can be jumped."""
+        if (x, y) not in self.kinds:
+            coll = _collision(self.pb, x, y)
+            ledge = LEDGES.get(COLLISION.get(coll, ""))
+            self.kinds[(x, y)] = ledge or ("land" if COLLISION_PERMISSIONS[coll] & 0x0F == 0
+                                           else "blocked")
+        return self.kinds[(x, y)]
+
+    def inside(self, x: int, y: int) -> bool:
+        return 0 <= x < self.width and 0 <= y < self.height
+
+    def standable(self, x: int, y: int) -> bool:
+        return self.inside(x, y) and (x, y) not in self.people and self.kind(x, y) == "land"
+
+    def _moves(self, x: int, y: int):
+        for direction, (dx, dy) in STEP.items():
+            there = (x + dx, y + dy)
+            if not self.inside(*there) or there in self.people:
+                continue
+            kind = self.kind(*there)
+            if kind == "land":
+                yield direction, there
+            elif kind == direction and self.standable(x + 2 * dx, y + 2 * dy):
+                yield f"jump {direction}", (x + 2 * dx, y + 2 * dy)
+
+    def route(self, start: tuple[int, int], goals: set[tuple[int, int]]) -> str | None:
+        """e.g. "right 4, up 3"; "" if already there; None if there's no way.
+
+        The fewest moves, and of those the fewest turns, so it's easy to follow.
+        """
+        # Dijkstra over (tile, last move), costed (moves, turns)
+        best = {(start, None): (0, 0)}
+        heap = [(0, 0, start, None, ())]
+        while heap:
+            moves, turns, here, last, path = heapq.heappop(heap)
+            if here in goals:
+                return _runs(list(path))
+            if best.get((here, last), (moves, turns)) < (moves, turns):
+                continue
+            if here in self.exits and here != start:
+                continue  # it would warp you, not let you walk on
+            for move, there in self._moves(*here):
+                cost = (moves + 1, turns + (last is not None and move != last))
+                if cost < best.get((there, move), (1 << 30, 0)):
+                    best[(there, move)] = cost
+                    heapq.heappush(heap, (*cost, there, move, path + (move,)))
+        return None
+
+
+def _runs(moves: list[str]) -> str:
+    """["right", "right", "up"] -> "right 2, up 1"; jumps stay single."""
+    runs: list[list] = []
+    for move in moves:
+        if runs and runs[-1][0] == move and not move.startswith("jump"):
+            runs[-1][1] += 1
+        else:
+            runs.append([move, 1])
+    return ", ".join(m if m.startswith("jump") else f"{m} {n}" for m, n in runs)
+
+
+def _add_routes(pb: PyBoy, x: int, y: int, people: list[dict], exits: list[dict]) -> list[dict]:
+    """Give each exit and person a route from the player, and list the map's edges."""
+    walker = _Walker(pb, people, exits)
+    start = (x, y)
+    for e in exits:
+        e["route"] = walker.route(start, {(e["x"], e["y"])})
+        carpet = COLLISION.get(_collision(pb, e["x"], e["y"]), "")
+        if carpet.startswith("warp_carpet_"):  # a mat: you leave by walking off it
+            e["then"] = f"{carpet.removeprefix('warp_carpet_')} 1 more to go through"
+    for p in people:
+        sides = {(p["x"] - dx, p["y"] - dy): d for d, (dx, dy) in STEP.items()}
+        goals = {spot for spot in sides if spot == start or walker.standable(*spot)}
+        p["route"] = walker.route(start, goals)
+        if p["route"] is not None:  # which side it reached decides which way to face
+            spot = start if start in sides else _end(start, p["route"])
+            p["then"] = f"face {sides.get(spot, '?')}"
+    edges = []
+    for side, to in _connections(pb).items():
+        direction = SIDES[side]
+        dx, dy = STEP[direction]
+        edge = [(walker.width - 1 if side == "east" else 0, ty) for ty in range(walker.height)] \
+            if side in ("east", "west") else \
+            [(tx, walker.height - 1 if side == "south" else 0) for tx in range(walker.width)]
+        goals = {(ex, ey) for ex, ey in edge
+                 if walker.standable(ex, ey) and walker.kind(ex + dx, ey + dy) == "land"}
+        edges.append({"side": side, "to": to, "route": walker.route(start, goals),
+                      "then": f"{direction} 1 more to cross into {to}"})
+    return edges
+
+
+def _end(start: tuple[int, int], route: str) -> tuple[int, int]:
+    x, y = start
+    for part in route.split(", "):
+        if part.startswith("jump "):
+            dx, dy = STEP[part.removeprefix("jump ")]
+            x, y = x + 2 * dx, y + 2 * dy
+        else:
+            direction, n = part.split()
+            dx, dy = STEP[direction]
+            x, y = x + int(n) * dx, y + int(n) * dy
+    return x, y
 
 
 def _adjacent(pb: PyBoy, x: int, y: int, people: list[dict], exits: list[dict],
@@ -272,7 +411,8 @@ def observe(pb: PyBoy) -> dict:
         people = _people(pb)
         exits, things = _events(pb)
         loaded = _map_loaded(pb, x, y, exits)
-        obs.update(people=people, exits=exits, things=things if loaded else [],
+        edges = _add_routes(pb, x, y, people, exits) if loaded else []
+        obs.update(people=people, exits=exits, edges=edges, things=things if loaded else [],
                    adjacent=_adjacent(pb, x, y, people, exits, things) if loaded else None,
                    grid=_grid(pb, x, y, people, exits, things) if loaded else None)
     return obs
@@ -280,12 +420,24 @@ def observe(pb: PyBoy) -> dict:
 
 # -- describing ----------------------------------------------------------------
 
-def _where(dx: int, dy: int) -> str:
-    """How to get somewhere from the player, e.g. "(from you: 5 up, 4 right)"."""
-    parts = [f"{abs(dy)} {'down' if dy > 0 else 'up'}" if dy else "",
-             f"{abs(dx)} {'right' if dx > 0 else 'left'}" if dx else ""]
-    steps = ", ".join(p for p in parts if p)
-    return f"(from you: {steps})" if steps else "(where you are)"
+def _route(item: dict) -> str:
+    """How to get there, from the routes ``observe`` worked out."""
+    if "route" not in item:  # the map wasn't readable
+        return ""
+    if item["route"] is None:
+        return ", no walkable route from here"
+    steps = [s for s in (item["route"], item.get("then")) if s]
+    return ", route: " + ", then ".join(steps) if steps else ", you're on it"
+
+
+def _grid_lines(grid: dict) -> list[str]:
+    """The grid with x across the top and y down the side; rows off the map are dropped."""
+    xs = range(grid["left"], grid["left"] + len(grid["rows"][0]))
+    lines = ["     " + "".join(f"{x:>3}" for x in xs)]
+    for y, row in enumerate(grid["rows"], start=grid["top"]):
+        if row.strip():
+            lines.append(f"{y:>4} " + "".join(f"{c:>3}" for c in row).rstrip())
+    return lines
 
 
 def _mon(m: dict) -> str:
@@ -361,13 +513,15 @@ def describe(before: dict | None, after: dict, pressed: list[str] = ()) -> str:
                      f"HP {you['hp']}/{you['max_hp']} vs {enemy['species']} L{enemy['level']} "
                      f"HP {enemy['hp_percent']}%")
     else:
-        rel = lambda t: _where(t["x"] - p["x"], t["y"] - p["y"])  # noqa: E731
         if after["people"]:
             lines.append("People: " + "; ".join(
-                f"{q['name']} at ({q['x']}, {q['y']}) {rel(q)}" for q in after["people"]))
+                f"{q['name']} at ({q['x']}, {q['y']}){_route(q)}" for q in after["people"]))
         if after["exits"]:
             lines.append("Exits: " + "; ".join(
-                f"to {e['to']} at ({e['x']}, {e['y']}) {rel(e)}" for e in after["exits"]))
+                f"to {e['to']} at ({e['x']}, {e['y']}){_route(e)}" for e in after["exits"]))
+        if after.get("edges"):
+            lines.append("Map edges: " + "; ".join(
+                f"{e['side']} to {e['to']}{_route(e)}" for e in after["edges"]))
         grid = after["grid"]
         on_screen = [t for t in after["things"]
                      if 0 <= t["x"] - grid["left"] < 10 and 0 <= t["y"] - grid["top"] < 9
@@ -383,11 +537,8 @@ def describe(before: dict | None, after: dict, pressed: list[str] = ()) -> str:
         else:
             lines.append("Next to you: " + ", ".join(f"{d} {what}"
                                                       for d, what in after["adjacent"].items()))
-            lines.append(f"Map around you (top left is ({grid['left']}, {grid['top']})):")
-            rows = [row.rstrip() for row in grid["rows"]]
-            while rows and not rows[-1]:  # off the bottom of the map; nothing to see
-                rows.pop()
-            lines += [f"  {row}" for row in rows]
+            lines.append("Map around you (x across, y down):")
+            lines += _grid_lines(grid)
     if after["party"]:
         lines.append("Party: " + "; ".join(_mon(mon) for mon in after["party"]))
     bag = ", ".join(f"{i['name']} x{i['count']}" for i in after["bag"]) or "empty"

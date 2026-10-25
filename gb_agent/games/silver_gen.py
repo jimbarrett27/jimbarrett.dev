@@ -28,6 +28,10 @@ SYMBOLS = [
     "wCurMapWarpEventCount", "wCurMapWarpEventsPointer",
     "wCurMapBGEventCount", "wCurMapBGEventsPointer",
     "wTileDown", "wTileUp", "wTileLeft", "wTileRight",  # the game's own movement checks
+    "wNorthConnectedMapGroup", "wNorthConnectedMapNumber",  # group $ff: no connection
+    "wSouthConnectedMapGroup", "wSouthConnectedMapNumber",
+    "wWestConnectedMapGroup", "wWestConnectedMapNumber",
+    "wEastConnectedMapGroup", "wEastConnectedMapNumber",
     # people: object structs (the player is the first)
     "wPlayerStruct", "wPlayerMapX", "wPlayerMapY", "wPlayerDirection",
     "wObject1Struct", "wObject1Sprite", "wObject1MapX", "wObject1MapY",

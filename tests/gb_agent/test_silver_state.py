@@ -30,6 +30,41 @@ def _steps() -> list[tuple[int, list[dict]]]:
     return steps
 
 
+def _replayed(silver_rom, upto: int):
+    """A game at the end of step ``upto`` of the recorded run, settled for half a second."""
+    pyboy = boot(silver_rom, SILVER.load_start_state())
+    for step, events in _steps():
+        if step > upto:
+            break
+        for event in events:
+            apply_event(pyboy, event)
+    apply_event(pyboy, {"type": "tick", "frames": 30})
+    return pyboy
+
+
+def _tap(pyboy, button: str) -> None:
+    for event in ({"type": "press", "button": button}, {"type": "tick", "frames": 8},
+                  {"type": "release", "button": button}, {"type": "tick", "frames": 12}):
+        apply_event(pyboy, event)
+
+
+def _follow(pyboy, route: str, then: str | None) -> None:
+    """Walk a route one tap per tile, as an agent would (a tap that only turns the
+    player is repeated), then take the last step through an exit or over an edge."""
+    parts = [p for p in route.split(", ") if p]
+    if then and not then.startswith("face"):
+        parts.append(" ".join(then.split()[:2]))
+    for part in parts:
+        direction, count = (part.split()[1], 1) if part.startswith("jump") else part.split()
+        for _ in range(int(count)):
+            here = lambda: (observe(pyboy)["player"]["x"], observe(pyboy)["player"]["y"])  # noqa: E731
+            before = here()
+            _tap(pyboy, direction)
+            if here() == before:
+                _tap(pyboy, direction)
+    apply_event(pyboy, {"type": "tick", "frames": 90})
+
+
 @pytest.fixture(scope="module")
 def replay(silver_rom):
     """{step: (observation, the game's own collision of the 4 tiles around the player)}."""
@@ -57,7 +92,7 @@ def test_the_bedroom_at_the_start(replay):
     obs, _ = replay[0]
     assert obs["map"]["name"] == "Players House 2F"
     assert (obs["player"]["x"], obs["player"]["y"], obs["player"]["facing"]) == (3, 3, "down")
-    assert obs["exits"] == [{"x": 7, "y": 0, "to": "Players House 1F"}]
+    assert obs["exits"] == [{"x": 7, "y": 0, "to": "Players House 1F", "route": "right 4, up 3"}]
     assert obs["adjacent"] == {"up": "floor", "down": "floor", "left": "floor", "right": "floor"}
     rows = obs["grid"]["rows"]
     assert rows[4][4] == "@" and rows[1][8] == "D"  # the player, and the stairs at (7, 0)
@@ -69,7 +104,7 @@ def test_mom_talking_downstairs(replay):
     assert obs["map"]["name"] == "Players House 1F"
     assert obs["text"] == [["He said he wanted", "you to do"]]
     assert obs["script_running"]
-    assert {"name": "Mom", "x": 9, "y": 2} in obs["people"]
+    assert [(p["name"], p["x"], p["y"]) for p in obs["people"]] == [("Mom", 9, 2)]
     assert obs["adjacent"]["down"] == "Mom"
     assert obs["adjacent"]["up"] == "exit to Players House 2F"
 
@@ -111,6 +146,34 @@ def test_no_map_while_the_buffer_holds_something_else(replay):
     assert "not readable right now" in describe(None, obs)
 
 
+def test_routes_avoid_furniture_and_use_mats_and_edges(replay):
+    downstairs, _ = replay[30]
+    mom = next(p for p in downstairs["people"] if p["name"] == "Mom")
+    assert (mom["route"], mom["then"]) == ("", "face down")  # she's right below
+    door = next(e for e in downstairs["exits"] if (e["x"], e["y"]) == (7, 7))
+    assert door["then"] == "down 1 more to go through"  # a mat, not a door
+    town, _ = replay[95]
+    assert {e["side"]: e["to"] for e in town["edges"]} == {"west": "Route 29", "east": "Route 27"}
+    assert next(e for e in town["edges"] if e["side"] == "east")["route"] is None  # water
+
+
+@pytest.mark.parametrize("step, kind, target", [
+    (0, "exits", "Players House 1F"),  # around the furniture to the stairs
+    (95, "exits", "Elms Lab"),  # across town to a door
+    (244, "edges", "New Bark Town"),  # along Route 29, around its ledges, over the edge
+])
+def test_following_a_route_gets_there(silver_rom, step, kind, target):
+    """Story scripts and wild battles can stop a walk part way, so these are moments
+    of the recorded run where nothing does."""
+    pyboy = _replayed(silver_rom, step)
+    try:
+        item = next(i for i in observe(pyboy)[kind] if i["to"] == target)
+        _follow(pyboy, item["route"], item.get("then"))
+        assert observe(pyboy)["map"]["name"] == target
+    finally:
+        pyboy.stop(save=False)
+
+
 def test_collision_agrees_with_the_game_wherever_the_player_stands(replay):
     """The game's own movement checks are the ground truth for the 4 tiles around the
     player; they're stale just after a warp (so exit tiles are skipped) and mid-walk."""
@@ -137,8 +200,10 @@ def _obs(**changes) -> dict:
         "map": {"group": 24, "number": 7, "name": "Players House 2F", "width": 8, "height": 6},
         "player": {"x": 3, "y": 3, "facing": "down", "walking": False},
         "script_running": False, "text": [], "battle": None, "party": [], "bag": [],
-        "money": 3000, "badges": 0, "people": [], "exits": [{"x": 7, "y": 0, "to": "Players House 1F"}],
-        "things": [], "adjacent": {"up": "wall", "down": "floor", "left": "floor", "right": "floor"},
+        "money": 3000, "badges": 0, "people": [],
+        "exits": [{"x": 7, "y": 0, "to": "Players House 1F", "route": "right 4, up 3"}],
+        "things": [],
+        "adjacent": {"up": "wall", "down": "floor", "left": "floor", "right": "floor"},
         "grid": {"left": -1, "top": -1, "rows": [" ######SD", "   ...@..."]},
     }
     for key, value in changes.items():
@@ -184,4 +249,17 @@ def test_items_money_and_battles_in_the_changes():
 def test_no_changes_line_without_a_before():
     text = describe(None, _obs())
     assert not text.startswith("Changes") and text.startswith("Where: Players House 2F")
-    assert "Exits: to Players House 1F at (7, 0) (from you: 3 up, 4 right)" in text
+    assert "Exits: to Players House 1F at (7, 0), route: right 4, up 3" in text
+    assert "Map around you (x across, y down):" in text
+
+
+def test_the_grid_is_labelled_with_coordinates():
+    grid = {"left": 5, "top": -1, "rows": ["     ", "#.@.D", "#...."]}
+    text = describe(None, _obs(grid=grid))
+    lines = text.splitlines()
+    at = lines.index("Map around you (x across, y down):")
+    assert lines[at + 1:at + 4] == [
+        "       5  6  7  8  9",  # row -1 is off the map, so it's left out
+        "   0   #  .  @  .  D",
+        "   1   #  .  .  .  .",
+    ]
