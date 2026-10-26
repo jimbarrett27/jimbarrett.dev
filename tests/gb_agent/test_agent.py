@@ -13,7 +13,7 @@ from pydantic import Field
 from gb_agent.agent import GameAgent
 from gb_agent.games import GameProfile, MemRef
 from gb_agent.models import get_profile
-from gb_agent.run import ExperimentConfig, Run
+from gb_agent.run import ExperimentConfig, ResumePoint, Run
 from gb_agent.sandbox import SandboxLimits
 from gb_agent.steps import StepLimits
 from tests.gb_agent.conftest import TEST_ROM, needs_docker
@@ -404,3 +404,39 @@ def test_the_state_report_can_be_turned_off(tmp_path, game, image):
     assert "STATE HELP" not in model.seen[0][0].content
     assert "State:" not in tool_texts(model)[0]
     assert jsonl(run, "steps.jsonl")[0]["observation"] is None
+
+
+def test_a_run_resumes_from_a_kept_step_of_an_earlier_one(make_run, game, image, tmp_path):
+    first = make_run()
+    tap_a = 'def tap_a(game):\n    """Tap A."""\n    game.tap("a")\n'
+    play(first, [
+        say(call("wait", frames=10)),  # step 1
+        say(call("update_notes", notes="GOAL: one")),
+        say(call("wait", frames=20)),  # step 2
+        say(call("write_script", name="tap_a", reason="tap A", code=tap_a),
+            call("update_notes", notes="<thought>x</thought>GOAL: two")),
+        say(call("wait", frames=30)),  # step 3
+    ])
+    # What the agent did between steps 2 and 3 belongs to step 2: it saw step 2's state
+    assert ResumePoint.find(first.dir, 2).notes == "GOAL: two"
+    point = ResumePoint.find(first.dir, 1)
+    assert (point.step, point.frame, point.notes) == (1, 10, "GOAL: one")
+    with pytest.raises(ValueError, match="wasn't kept"):
+        ResumePoint.find(first.dir, 9)
+    assert ResumePoint.find(first.dir).step == 3
+
+    config = ExperimentConfig(game="test", model="qwen3-vl-2b-local", goal="carry on",
+                              frame_budget=50, step=first.config.step)
+    second = Run(config, root=tmp_path / "runs", game=game, image=image, resume=point)
+    assert second.state == (first.dir / "states" / "step00001.state").read_bytes()
+    assert (second.frame, second.step, second.notes) == (10, 1, "GOAL: one")
+    assert "tap_a" not in [i.name for i in second.library.scripts()]  # written after step 2
+    assert "walk" in [i.name for i in second.library.scripts()]
+    reason, model, _ = play(second, [say(call("wait", frames=100))])
+    assert "picks up a game already in progress" in model.seen[0][1].content[0]["text"]
+    assert reason == "frame_budget" and second.frame == 60  # 50 frames of its own budget
+    assert json.loads(next(l for l in (second.dir / "steps.jsonl").read_text().splitlines()))[
+        "step"] == 2
+    manifest = json.loads((second.dir / "manifest.json").read_text())
+    assert manifest["resumed_from"] == {"run": first.id, "step": 1, "frame": 10}
+    assert second.final_state_replays()

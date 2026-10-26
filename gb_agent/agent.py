@@ -222,6 +222,10 @@ class GameAgent:
                    "takes many steps, such as exploring a room or getting through a "
                    "conversation. It keeps that work out of your own context."
                    if not self.run.notes and "run_subagent" in self.tools.allowed else ""))
+        if (resumed := self.run.resumed_from) is not None:
+            text += (f"\n\nThis picks up a game already in progress, where an earlier run "
+                     f"stopped (its step {resumed.step}). Your notes and scripts are from then; "
+                     "check them against the game now.")
         if self.run.notes:
             text += f"\n\nYour notes (kept across context clears):\n{self.run.notes}"
         text += self._state_now()
