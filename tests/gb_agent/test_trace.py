@@ -62,6 +62,24 @@ def test_an_unusable_step_says_nothing_was_kept():
     assert "problem: no result" in text
 
 
+def test_text_that_went_by_comes_after_the_state():
+    trace = Trace(title="mash_text()", status="ok", usable=True, start_frame=0, end_frame=220,
+                  state="Changes: none", text="Oh! Your POKéMON is adorable!")
+    text = trace.to_text()
+    assert "Changes: none\nText during this step: Oh! Your POKéMON is adorable!" in text
+
+
+def test_a_step_that_ran_no_frames_says_nothing_happened():
+    stub = Trace(title="walk_to(target_x=6) @ a912501", status="ok", usable=True,
+                 start_frame=100, end_frame=100)
+    assert "nothing happened: no frames ran" in stub.to_text()
+    failed = Trace(title="walk_to()", status="error", usable=True, start_frame=100,
+                   end_frame=100, error={"type": "TypeError", "message": "missing args"})
+    assert "nothing happened" not in failed.to_text()
+    moved = Trace(title="move()", status="ok", usable=True, start_frame=100, end_frame=139)
+    assert "nothing happened" not in moved.to_text()
+
+
 def _png(color, size=(160, 144), box=None):
     import io
 

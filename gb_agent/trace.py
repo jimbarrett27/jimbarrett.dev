@@ -6,7 +6,9 @@ a small model's context; the full detail stays in the run directory.
 
 After a kept step the game profile's description of the game state (``state``)
 goes near the top, outside the budget: it's what the agent most needs, and it's
-already short. Memory only appears if the agent asked to watch it.
+already short. So does the text that went by during the step, when some of it
+is gone by the end: a conversation mashed through leaves nothing on screen to
+compare. Memory only appears if the agent asked to watch it.
 """
 
 from collections import Counter
@@ -35,6 +37,7 @@ class Trace:
     screen_change: float | None = None  # share of pixels that differ, before vs after
     problem: str = ""
     state: str = ""  # the game profile's description of the state after the step
+    text: str = ""  # text that went by during the step, if some isn't on screen any more
 
     @property
     def frames(self) -> int:
@@ -46,11 +49,16 @@ class Trace:
                 f"frames {self.start_frame}→{self.end_frame} ({self.frames} used)"]
         if self.problem:
             head.append(f"problem: {self.problem}")
+        if self.usable and self.status == "ok" and self.frames == 0:
+            head.append("nothing happened: no frames ran and no buttons were pressed "
+                        "(is the script a stub, or did it return early?)")
         if self.inputs:
             head.append(f"inputs: {self.inputs}")
         if self.state:
             head.append(self.state)
             budget += len(self.state) + 1
+        if self.text:
+            head.append(f"Text during this step: {_short(self.text, 600)}")
         if self.screen_change is not None:
             head.append(f"screen: {describe_change(self.screen_change)}")
         if self.value is not None:
@@ -171,6 +179,8 @@ def build_trace(outcome: StepOutcome, title: str) -> Trace:
     if outcome.state is None:
         return trace
     trace.inputs = summarize_inputs(outcome.events)
+    if outcome.text is not None and outcome.text.gone_by:
+        trace.text = outcome.text.text()
     trace.memory = [(label, outcome.watch_before.get(label, []), after)
                     for label, after in outcome.watch_after.items()]
     if outcome.before_png and outcome.screenshot_png:

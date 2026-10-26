@@ -10,15 +10,21 @@ memory -- and then the step is marked unverified.
 
 Replaying runs no agent code, only recorded inputs into a trusted ROM, so it's
 safe to do on the host. The inputs themselves come out of the sandbox, though,
-so they're validated before they're replayed.
+so they're validated before they're replayed. The replay also reads the game's
+text boxes as it goes (``read_text``), so the report can say what was said even
+when the conversation is over by the end of the step.
 """
 
 import base64
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from gb_agent.emulator import BUTTONS, apply_events, boot, save_state
+from pyboy import PyBoy
+
+from gb_agent.emulator import BUTTONS, apply_event, apply_events, boot, save_state
 from gb_agent.sandbox import SandboxLimits, SandboxResult, run_in_sandbox
+from gb_agent.text_log import TextLog
 
 HARNESS = "gb_agent.emulator.harness"
 ROM_IN_SANDBOX = "/rom/game.gb"
@@ -33,6 +39,7 @@ class StepLimits:
     max_events: int = 200_000
     keyframe_every: int = 120  # frames between keyframe screenshots
     max_keyframes: int = 6
+    text_every: int = 4  # frames between reads of the text boxes during the replay
     sandbox: SandboxLimits = SandboxLimits()
 
 
@@ -50,6 +57,7 @@ class StepOutcome:
     watch_before: dict[str, list[int]] = field(default_factory=dict)
     watch_after: dict[str, list[int]] = field(default_factory=dict)
     verified: bool = False  # replaying the events reproduced the state exactly
+    text: TextLog | None = None  # text seen during the replay, if it was read
     problem: str = ""  # why there's no state, or why it isn't verified
 
     @property
@@ -130,11 +138,28 @@ def _memory_values(raw) -> dict[str, list[int]]:
     return {str(k): v for k, v in raw.items()}
 
 
-def replay(rom: bytes, start_state: bytes, events: list[dict]) -> bytes:
-    """The state reached by applying ``events`` from ``start_state``."""
+def replay(rom: bytes, start_state: bytes, events: list[dict], *,
+           look: Callable[[PyBoy], None] | None = None, every: int = 4) -> bytes:
+    """The state reached by applying ``events`` from ``start_state``.
+
+    ``look``, if given, is called at the start and every ``every`` frames after.
+    """
     pyboy = boot(rom, start_state)
     try:
-        apply_events(pyboy, events)
+        if look is None:
+            apply_events(pyboy, events)
+        else:
+            look(pyboy)
+            for event in events:
+                if event["type"] != "tick":
+                    apply_event(pyboy, event)
+                    continue
+                left = event["frames"]
+                while left:
+                    frames = min(every, left)
+                    apply_event(pyboy, {"type": "tick", "frames": frames})
+                    left -= frames
+                    look(pyboy)
         return save_state(pyboy)
     finally:
         pyboy.stop(save=False)
@@ -150,12 +175,15 @@ def run_step(
     library_dir: Path | None = None,
     watch: dict | None = None,
     image: str | None = None,
+    read_text: Callable[[PyBoy], list[list[str]]] | None = None,
 ) -> StepOutcome:
     """Run ``code`` against the game at ``state`` in the sandbox, and check it.
 
     ``library_dir`` is the library's package directory, mounted read-only so
     the code can ``import library.<script>``. ``watch`` is memory to read
     before and after (see ``validate_watch``); it raises ValueError if invalid.
+    ``read_text`` reads the text boxes on screen; given it, the replay collects
+    the text that went by into ``outcome.text``.
     """
     watch = watch or {}
     if problem := validate_watch(watch):
@@ -218,7 +246,12 @@ def run_step(
     outcome.keyframes = keyframes
     outcome.watch_before = watch_before
     outcome.watch_after = watch_after
-    outcome.verified = replay(Path(rom_path).read_bytes(), state, outcome.events) == new_state
+    look = None
+    if read_text is not None:
+        outcome.text = TextLog()
+        look = lambda pyboy: outcome.text.add(read_text(pyboy))  # noqa: E731
+    outcome.verified = replay(Path(rom_path).read_bytes(), state, outcome.events,
+                              look=look, every=limits.text_every) == new_state
     if not outcome.verified:
         outcome.problem = ("replaying the recorded inputs didn't reproduce the step's state: "
                            "something changed the game without going through `game`")

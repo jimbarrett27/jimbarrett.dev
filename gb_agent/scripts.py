@@ -7,7 +7,10 @@ whether a step's state is kept (one that didn't verify never is).
 """
 
 import json
+from collections.abc import Callable
 from pathlib import Path
+
+from pyboy import PyBoy
 
 from gb_agent.library import Library, ScriptError, check_name
 from gb_agent.steps import StepLimits, StepOutcome, run_step
@@ -43,6 +46,7 @@ def run_script(
     watch: dict | None = None,
     limits: StepLimits = StepLimits(),
     image: str | None = None,
+    read_text: Callable[[PyBoy], list[list[str]]] | None = None,
 ) -> tuple[StepOutcome, Trace, str]:
     """Run library script ``name``; return the outcome, its trace, and the version run."""
     args = args or {}
@@ -57,7 +61,7 @@ def run_script(
 
     outcome = run_step(rom_path, state, call_code(name, args), start_frame=start_frame,
                        limits=limits, library_dir=library.package_dir, watch=watch,
-                       image=image)
+                       image=image, read_text=read_text)
     library.record_use(name, version, ok=outcome.usable and outcome.sandbox.status == "ok",
                        frames=outcome.frames_used,
                        error=(outcome.sandbox.error or {}).get("type") or outcome.problem or None)
@@ -74,8 +78,10 @@ def run_code(
     watch: dict | None = None,
     limits: StepLimits = StepLimits(),
     image: str | None = None,
+    read_text: Callable[[PyBoy], list[list[str]]] | None = None,
 ) -> tuple[StepOutcome, Trace]:
     """Run one-off ``code``, with ``game`` and the library available."""
     outcome = run_step(rom_path, state, code, start_frame=start_frame, limits=limits,
-                       library_dir=library.package_dir, watch=watch, image=image)
+                       library_dir=library.package_dir, watch=watch, image=image,
+                       read_text=read_text)
     return outcome, build_trace(outcome, "one-off code")
