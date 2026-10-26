@@ -153,7 +153,7 @@ class Run:
         outcome, trace, version = run_script(
             self.library, name, args, rom_path=self.game.rom, state=self.state,
             start_frame=self.frame, watch=self.watch, limits=self._limits(max_frames),
-            image=self.image)
+            image=self.image, read_text=self._read_text)
         self._finish_step(outcome, trace, agent=agent, script=name, version=version, args=args)
         return trace
 
@@ -165,7 +165,8 @@ class Run:
                    if snippet else None)
         outcome, trace = run_code(self.library, code, rom_path=self.game.rom, state=self.state,
                                   start_frame=self.frame, watch=self.watch,
-                                  limits=self._limits(max_frames), image=self.image)
+                                  limits=self._limits(max_frames), image=self.image,
+                                  read_text=self._read_text)
         if title:
             trace.title = title
         self._finish_step(outcome, trace, agent=agent, version=version, code=code)
@@ -214,6 +215,10 @@ class Run:
     @property
     def reports_state(self) -> bool:
         return self.config.state_report and self.game.observe is not None
+
+    @property
+    def _read_text(self):
+        return self.game.read_text if self.config.state_report else None
 
     def state_text(self) -> str:
         """The game's state as the agent sees it at the top of a report, or ""."""

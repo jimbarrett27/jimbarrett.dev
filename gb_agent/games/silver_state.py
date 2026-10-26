@@ -45,7 +45,9 @@ STATUS = [(0b111, "asleep"), (1 << 3, "poisoned"), (1 << 4, "burned"), (1 << 5, 
 STATE_HELP = """\
 Each report starts with the game's state, read from memory: where you are, what's \
 on screen, the people and exits around you, and your Pokemon. "Changes" at the top \
-says what the step did. Coordinates are (x, y) tiles on the current map: x counts \
+says what the step did. If text went by during the step (someone talking, a sign, \
+an item), "Text during this step" has all of it, even if the box has closed since. \
+Coordinates are (x, y) tiles on the current map: x counts \
 right from 0, y counts down from 0, so "up" is y - 1.
 
 Exits, people and map edges each come with a route: the shortest way to walk there \
@@ -92,7 +94,7 @@ def _collision(pb: PyBoy, x: int, y: int) -> int:
     return _rom(pb, _u8(pb, "wTilesetCollisionBank"), addr)
 
 
-def _boxes(pb: PyBoy) -> list[list[str]]:
+def text_boxes(pb: PyBoy) -> list[list[str]]:
     """The text inside every box (┌…┐ over └…┘) on screen, line by line."""
     tiles = [[pb.memory[S["wTilemap"] + row * 20 + col] for col in range(20)] for row in range(18)]
     char = lambda b: CHARMAP.get(b, " ")  # noqa: E731
@@ -400,7 +402,7 @@ def observe(pb: PyBoy) -> dict:
                    "facing": DIRECTIONS.get(_u8(pb, "wPlayerDirection") & 0x0C, "down"),
                    "walking": (x, y) != (_u8(pb, "wXCoord"), _u8(pb, "wYCoord"))},
         "script_running": bool(_u8(pb, "wScriptRunning")),
-        "text": _boxes(pb),
+        "text": text_boxes(pb),
         "battle": battle,
         "party": _party(pb),
         "bag": _bag(pb),

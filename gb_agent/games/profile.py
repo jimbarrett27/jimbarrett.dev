@@ -60,6 +60,9 @@ class GameProfile:
     # (before is None for a plain description); state_help explains it in the prompt.
     observe: Callable[[PyBoy], dict] | None = None
     describe: Callable[[dict | None, dict, list[str]], str] | None = None
+    # read_text(pyboy) -> the text in each box on screen, line by line; read during
+    # each step's replay so the report has the text that went by, not just what's left
+    read_text: Callable[[PyBoy], list[list[str]]] | None = None
     state_help: str = ""
 
     def rom_bytes(self) -> bytes:

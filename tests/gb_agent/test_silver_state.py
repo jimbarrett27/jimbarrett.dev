@@ -9,10 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from gb_agent.emulator import apply_event, boot
+from gb_agent.emulator import apply_event, boot, save_state
 from gb_agent.games import SILVER
 from gb_agent.games.silver_data import SYMBOLS
-from gb_agent.games.silver_state import STEP, _tile, describe, observe
+from gb_agent.games.silver_state import STEP, _tile, describe, observe, text_boxes
+from gb_agent.steps import replay as replay_step
+from gb_agent.text_log import TextLog
 
 INPUTS = Path(__file__).parent / "fixtures" / "silver_haiku_inputs.txt"
 
@@ -107,6 +109,21 @@ def test_mom_talking_downstairs(replay):
     assert [(p["name"], p["x"], p["y"]) for p in obs["people"]] == [("Mom", 9, 2)]
     assert obs["adjacent"]["down"] == "Mom"
     assert obs["adjacent"]["up"] == "exit to Players House 2F"
+
+
+def test_reading_text_during_a_replay_gets_the_whole_conversation(silver_rom):
+    """Mom's talk downstairs, as one long step: it's over by the end, but the text
+    read along the way has all of it, and reading it doesn't change the replay."""
+    pyboy = _replayed(silver_rom, 24)
+    start = save_state(pyboy)
+    pyboy.stop(save=False)
+    events = [e for step, events in _steps() if 25 <= step <= 40 for e in events]
+    log = TextLog()
+    looked = replay_step(silver_rom, start, events, look=lambda pb: log.add(text_boxes(pb)))
+    assert looked == replay_step(silver_rom, start, events)
+    assert "He said he wanted you to do some-thing for him." in log.text()
+    assert "SILVER received POKéGEAR." in log.text()
+    assert log.gone_by
 
 
 def test_a_step_that_ends_mid_walk_reports_where_the_player_is_going(replay):

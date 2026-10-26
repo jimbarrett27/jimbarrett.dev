@@ -61,5 +61,6 @@ SILVER = GameProfile(
     ),
     observe=silver_state.observe,
     describe=silver_state.describe,
+    read_text=silver_state.text_boxes,
     state_help=silver_state.STATE_HELP,
 )
