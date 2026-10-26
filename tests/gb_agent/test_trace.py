@@ -22,6 +22,15 @@ def test_input_summary_mentions_buttons_still_held():
     assert summarize_inputs([{"frame": 0, "type": "tick", "frames": 5}]) == "no buttons pressed"
 
 
+def test_input_summary_says_when_a_button_was_pressed_again_while_held():
+    # Qwen, 2026-10-26, on the naming screen: press, tick, press... and one release
+    events = [press("a", 0), press("a", 5), press("a", 10), release("a", 15)]
+    summary = summarize_inputs(events)
+    assert "pressed again while still held, without a release in between: a ×2" in summary
+    assert "pressed again" not in summarize_inputs([press("a", 0), release("a", 4),
+                                                    press("a", 8), release("a", 12)])
+
+
 def test_text_report():
     trace = Trace(
         title="walk(steps=2) @ abc1234", status="ok", usable=True,

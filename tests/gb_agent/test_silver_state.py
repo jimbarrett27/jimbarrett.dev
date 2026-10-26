@@ -228,6 +228,28 @@ def _obs(**changes) -> dict:
     return obs
 
 
+def test_a_move_during_a_cutscene_says_walking_is_locked():
+    # Qwen, 2026-10-26: Mom walking up to the player downstairs
+    locked = _obs(script_running=True)
+    text = describe(locked, locked, ["left"])
+    assert "a cutscene or conversation has control, so you can't walk" in text
+    assert "toward: floor" not in text
+
+
+def test_the_naming_screen_says_what_the_cursor_is_on():
+    naming = {"title": "CYNDAQUIL'S NICKNAME?", "name": "", "max": 10, "cursor": "A",
+              "column": 0, "row": 0}
+    opened = _obs(naming=naming)
+    text = describe(_obs(text=[["Give a nickname?"]]), opened, ["a"])
+    assert "Changes: naming screen opened" in text
+    assert "Mode: naming screen (CYNDAQUIL'S NICKNAME?)" in text
+    assert 'Name so far: "" (0 of 10 letters)' in text and "Cursor on: A" in text
+    assert "Where:" not in text and "Map around you" not in text  # the map isn't on screen
+    typed = _obs(naming={**naming, "name": "  ", "cursor": "END", "column": 8, "row": 4})
+    assert 'name: "" -> "  "; cursor moved to: END' in describe(opened, typed, ["a", "start"])
+    assert 'naming screen closed (the name was "  "' in describe(typed, _obs(), ["a"])
+
+
 def test_a_blocked_move_says_what_is_in_the_way():
     facing_up = _obs(player={"facing": "up"})
     text = describe(facing_up, facing_up, ["up", "up"])
