@@ -65,6 +65,21 @@ PROFILES: dict[str, ModelProfile] = {p.name: p for p in [
         max_output_tokens=1536,
     ),
     ModelProfile(
+        name="qwen3.6-35b-a3b-local",
+        provider="local",
+        model="qwen3.6-35b-a3b",  # llama-server's --alias
+        base_url=LOCAL_SERVER,
+        # 64k like Gemma, and as cheap: 10 of its 40 layers are full attention. On
+        # 2026-10-26 it generated ~9.7 tok/s (Gemma: 13.6), with the 22.4 GB of
+        # weights just fitting in RAM once everything else big was stopped.
+        context_window=65_536,
+        vision=True,
+        compact_at=0.4,
+        # It thinks first too (700-1000 tokens, capped at 1024 by the server), and
+        # thinking counts against this.
+        max_output_tokens=1536,
+    ),
+    ModelProfile(
         name="qwen3-vl-8b-local",
         provider="local",
         model="qwen3-vl-8b",  # llama-server's --alias
