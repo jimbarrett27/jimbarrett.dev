@@ -120,7 +120,9 @@ all you'll have afterwards, besides your scripts. Keep what's still true, fix an
 that's wrong, and add what you've learned. Use these sections, in this order:
 {SECTIONS}
 Don't copy the game state (where you are, people, exits, the map grid, party, bag): \
-you'll be shown it fresh. At most 2000 characters. Reply with the notes only, as \
+you'll be shown it fresh, along with the places you've been and what you've been \
+told, which the game keeps track of. Where those and your notes disagree, the game \
+is right: fix your notes. At most 2000 characters. Reply with the notes only, as \
 plain text: no tool call.
 
 Your current notes:
@@ -228,6 +230,8 @@ class GameAgent:
                      "check them against the game now.")
         if self.run.notes:
             text += f"\n\nYour notes (kept across context clears):\n{self.run.notes}"
+        if journal := self.run.journal_text():
+            text += f"\n\n{journal}"
         text += self._state_now()
         return [self.system, self._with_screens(text, [
             (f"the screen now (frame {self.run.frame})", self.run.screenshot_png())])]

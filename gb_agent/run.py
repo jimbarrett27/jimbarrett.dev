@@ -30,6 +30,7 @@ holds every piece of code the agent ran.
 
 import json
 import logging
+import re
 import shutil
 import time
 from dataclasses import asdict, dataclass, field, replace
@@ -92,16 +93,18 @@ class ResumePoint:
     step: int
     frame: int
     notes: str
+    journal: dict | None  # the harness's journal as of the step, if the run kept one
 
     @classmethod
     def find(cls, run_dir: Path, step: int | None = None) -> "ResumePoint":
         """Kept step ``step`` of the run at ``run_dir``, or its last kept step."""
         run_dir = Path(run_dir)
-        kept = {}
+        kept, journals = {}, {}
         for line in (run_dir / "steps.jsonl").read_text().splitlines():
             record = json.loads(line)
             if record["kept"]:
                 kept[record["step"]] = record["end_frame"]
+                journals[record["step"]] = record.get("journal")
         if not kept:
             raise ValueError(f"{run_dir.name} has no kept steps to resume from")
         step = max(kept) if step is None else step
@@ -116,11 +119,37 @@ class ResumePoint:
             if record.get("kind") == "notes" and record.get("agent", "main") == "main" \
                     and record.get("step", 0) <= step:
                 notes = record["notes"]
-        return cls(run_dir, step, kept[step], clean_notes(notes))
+        return cls(run_dir, step, kept[step], clean_notes(notes), journals[step])
 
     @property
     def state(self) -> bytes:
         return (self.run_dir / "states" / f"step{self.step:05d}.state").read_bytes()
+
+
+def rebuild_journal(run_dir: Path, step: int, remember) -> dict:
+    """The journal as of ``step``, folded from the run's kept steps (and those of any
+    run it was resumed from), for runs from before steps.jsonl kept it. Their text is
+    only what the reports showed ("Text during this step"), so it's rougher."""
+    run_dir = Path(run_dir)
+    journal: dict = {}
+    before = None
+    manifest = run_dir / "manifest.json"
+    parent = json.loads(manifest.read_text()).get("resumed_from") if manifest.exists() else None
+    if parent:
+        journal = rebuild_journal(run_dir.parent / parent["run"], parent["step"], remember)
+    for line in (run_dir / "steps.jsonl").read_text().splitlines():
+        record = json.loads(line)
+        if record["step"] > step:
+            break
+        if not record["kept"] or not record.get("observation"):
+            continue
+        text = record.get("text")
+        if text is None:
+            shown = re.search(r"^Text during this step: (.*)$", record["trace"], re.M)
+            text = [shown.group(1)] if shown else []
+        remember(journal, before, record["observation"], text)
+        before = record["observation"]
+    return journal
 
 
 def _resume_library(point: ResumePoint, root: Path, usage_path: Path, run: str) -> Library:
@@ -178,6 +207,10 @@ class Run:
         self.kept_steps = 0
         self.watch: dict[str, tuple[int, int, int | None]] = {}
         self.notes = ""  # the main agent's own notes (update_notes), kept across compactions
+        self.journal: dict = {}  # the harness's own record for the agent (GameProfile.remember)
+        if resume is not None and self.game.remember is not None:
+            self.journal = resume.journal if resume.journal is not None else \
+                rebuild_journal(resume.run_dir, resume.step, self.game.remember)
         if resume is not None and resume.notes:
             self.set_notes(resume.notes, agent="main")
         self.llm_calls = 0
@@ -255,6 +288,7 @@ class Run:
                      args: dict | None = None, code: str | None = None) -> None:
         kept = outcome.usable
         step = self.step
+        text = outcome.text.lines if outcome.text is not None else []
         if not kept:
             trace.title += " [not kept]"
 
@@ -275,6 +309,8 @@ class Run:
             if self.reports_state and self.observation is not None:
                 pressed = [e["button"] for e in outcome.events if e["type"] == "press"]
                 trace.state = self.game.describe(before, self.observation, pressed)
+                if self.game.remember is not None:
+                    self.game.remember(self.journal, before, self.observation, text)
 
         logger.info("step %d %s: %s, frames %d→%d, %s", step, trace.title, outcome.sandbox.status,
                     outcome.start_frame, outcome.end_frame, "kept" if kept else "not kept")
@@ -285,6 +321,8 @@ class Run:
             "start_frame": outcome.start_frame, "end_frame": outcome.end_frame,
             "frames": outcome.frames_used, "problem": outcome.problem,
             "observation": self.observation if kept and self.reports_state else None,
+            "text": text,
+            "journal": self.journal if kept and self.game.remember is not None else None,
             "trace": trace.to_text(budget=20_000), "time": time.time(),
         })
 
@@ -297,6 +335,12 @@ class Run:
     @property
     def _read_text(self):
         return self.game.read_text if self.config.state_report else None
+
+    def journal_text(self) -> str:
+        """The harness's journal as shown to the agent, or ""."""
+        if self.game.recall is None or not self.reports_state:
+            return ""
+        return self.game.recall(self.journal)
 
     def state_text(self) -> str:
         """The game's state as the agent sees it at the top of a report, or ""."""
