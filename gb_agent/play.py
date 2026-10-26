@@ -1,7 +1,8 @@
 """Run one experiment: ``python -m gb_agent.play --model qwen3-vl-2b-local``.
 
 Prints the run directory at the start and a summary at the end. Paid models
-refuse to start without --allow-paid.
+refuse to start without --allow-paid. ``--resume RUN`` carries on from an earlier
+run instead of the game's start (see ``run.ResumePoint``).
 """
 
 import argparse
@@ -9,10 +10,12 @@ import logging
 import subprocess
 import sys
 from dataclasses import replace
+from pathlib import Path
 
 from gb_agent.agent import GameAgent
 from gb_agent.models import PROFILES, build_chat_model, get_profile
-from gb_agent.run import STEP_FRAMES, ExperimentConfig, Run
+from gb_agent.paths import gb_agent_path
+from gb_agent.run import STEP_FRAMES, ExperimentConfig, ResumePoint, Run
 from gb_agent.steps import StepLimits
 from gb_agent.subagents import SubAgentHost
 
@@ -38,6 +41,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--no-notify", action="store_true", help="don't send blockers to Telegram")
     p.add_argument("--allow-paid", action="store_true",
                    help="allow a paid (OpenRouter) model, for the agent or its sub-agents")
+    p.add_argument("--resume", metavar="RUN",
+                   help="carry on from an earlier run (a run id, a run directory, or 'latest'): "
+                        "its last kept step, or --resume-step, with its notes and library")
+    p.add_argument("--resume-step", type=int, metavar="N",
+                   help="with --resume: the kept step to start from")
     p.add_argument("--no-state-report", action="store_true",
                    help="don't describe the game state in reports: screenshots only, as "
                         "before 2026-10-25")
@@ -61,13 +69,22 @@ def main(argv=None) -> int:
         allow_paid=args.allow_paid,
         state_report=not args.no_state_report,
     )
-    run = Run(config)
+    resume = None
+    if args.resume:
+        resume = ResumePoint.find(_run_dir(args.resume), args.resume_step)
+    elif args.resume_step is not None:
+        print("--resume-step needs --resume", file=sys.stderr)
+        return 2
+    run = Run(config, resume=resume)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         handlers=[logging.StreamHandler(), logging.FileHandler(run.dir / "run.log")],
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
     print(f"run {run.id}\n  {run.dir}", flush=True)
+    if resume is not None:
+        print(f"  resumed from {resume.run_dir.name} at step {resume.step} (frame {resume.frame})",
+              flush=True)
     publisher = None
     if args.publish:  # its own process, so a publishing failure can't stop the run
         with (run.dir / "publish.log").open("a") as log:
@@ -95,6 +112,20 @@ def main(argv=None) -> int:
           f"({run.kept_steps} kept), {run.llm_calls} LLM calls, {run.tokens} tokens, "
           f"{run.minutes:.1f} min, {agent.compactions} compactions\n  {run.dir}")
     return 0
+
+
+def _run_dir(name: str) -> Path:
+    """A run directory from a run id, a path, or 'latest' (the newest run)."""
+    root = Path(gb_agent_path("runs"))
+    if name == "latest":
+        runs = sorted(p for p in root.iterdir() if (p / "steps.jsonl").exists())
+        if not runs:
+            raise SystemExit(f"no runs in {root}")
+        return runs[-1]
+    path = Path(name) if Path(name).is_dir() else root / name
+    if not (path / "steps.jsonl").exists():
+        raise SystemExit(f"no run at {path}")
+    return path
 
 
 if __name__ == "__main__":

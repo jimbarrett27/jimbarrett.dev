@@ -17,6 +17,11 @@ limits on LLM calls, tokens and time. A ``Run`` carries it out and records it:
       script_usage.jsonl
       run.mp4            if rendered
 
+A run can also pick up where an earlier one stopped (``ResumePoint``): it starts
+from one of that run's kept steps, with its notes and library as they were then,
+and carries on its frame and step numbers. It's still a new run directory; its
+manifest names the run it came from, and its video starts at the resumed step.
+
 Every step that ran and verified is kept and spends the frame budget; there are no
 test runs. A step whose record didn't verify is never kept. The agent's one-off
 code is committed to the library's ``snippets/`` before it runs, so the library
@@ -25,6 +30,7 @@ holds every piece of code the agent ran.
 
 import json
 import logging
+import shutil
 import time
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
@@ -35,6 +41,7 @@ from gb_agent.emulator import boot, save_state
 from gb_agent.games import GAMES, GameProfile
 from gb_agent.library import Library
 from gb_agent.models import get_profile
+from gb_agent.notes import clean_notes
 from gb_agent.scripts import run_code, run_script
 from gb_agent.steps import StepLimits, StepOutcome, validate_watch
 from gb_agent.trace import Trace
@@ -74,10 +81,72 @@ def _jsonl(path: Path, record: dict) -> None:
         f.write(json.dumps(record, default=str) + "\n")
 
 
+@dataclass(frozen=True)
+class ResumePoint:
+    """A kept step of an earlier run, to start a new run from.
+
+    The notes and library come with what the agent did after the step and before the
+    next one: it was looking at the step's state when it did that.
+    """
+    run_dir: Path
+    step: int
+    frame: int
+    notes: str
+
+    @classmethod
+    def find(cls, run_dir: Path, step: int | None = None) -> "ResumePoint":
+        """Kept step ``step`` of the run at ``run_dir``, or its last kept step."""
+        run_dir = Path(run_dir)
+        kept = {}
+        for line in (run_dir / "steps.jsonl").read_text().splitlines():
+            record = json.loads(line)
+            if record["kept"]:
+                kept[record["step"]] = record["end_frame"]
+        if not kept:
+            raise ValueError(f"{run_dir.name} has no kept steps to resume from")
+        step = max(kept) if step is None else step
+        if step not in kept:
+            near = sorted(kept, key=lambda s: abs(s - step))[:3]
+            raise ValueError(f"step {step} of {run_dir.name} wasn't kept; nearest kept: "
+                             + ", ".join(map(str, sorted(near))))
+        notes = ""
+        agents = run_dir / "agents.jsonl"
+        for line in agents.read_text().splitlines() if agents.exists() else []:
+            record = json.loads(line)
+            if record.get("kind") == "notes" and record.get("agent", "main") == "main" \
+                    and record.get("step", 0) <= step:
+                notes = record["notes"]
+        return cls(run_dir, step, kept[step], clean_notes(notes))
+
+    @property
+    def state(self) -> bytes:
+        return (self.run_dir / "states" / f"step{self.step:05d}.state").read_bytes()
+
+
+def _resume_library(point: ResumePoint, root: Path, usage_path: Path, run: str) -> Library:
+    """A copy of the earlier run's library, with its files as they were at the step."""
+    shutil.copytree(point.run_dir / "library", root)
+    library = Library(root, usage_path)
+    log = library._git("log", "--format=%H %(trailers:key=Step,valueonly,separator=)").stdout
+    later = [line.split() for line in log.splitlines()]
+    # Newest first: skip the commits made after the step; the next one is the target.
+    target = next(c[0] for c in later if len(c) == 1 or int(c[1]) <= point.step)
+    library._git("read-tree", "-u", "--reset", target)
+    library._commit(f"Resume from {point.run_dir.name} at step {point.step}\n\nRun: {run}")
+    # Usage stats: the earlier run's script runs up to the step (one per script step).
+    scripts_run = sum(1 for line in (point.run_dir / "steps.jsonl").read_text().splitlines()
+                      if (r := json.loads(line))["step"] <= point.step and r["script"])
+    old = point.run_dir / "script_usage.jsonl"
+    entries = old.read_text().splitlines() if old.exists() else []
+    kept = [e for e in entries if json.loads(e).get("kind", "script") == "script"][:scripts_run]
+    usage_path.write_text("".join(e + "\n" for e in kept))
+    return library
+
+
 class Run:
     def __init__(self, config: ExperimentConfig, *, root: Path | None = None,
                  run_id: str | None = None, game: GameProfile | None = None,
-                 image: str | None = None, notify=None):
+                 image: str | None = None, notify=None, resume: ResumePoint | None = None):
         self.config = config
         self.game = game or GAMES[config.game]
         self.model = get_profile(config.model)
@@ -88,20 +157,29 @@ class Run:
         for sub in ("frames", "states"):
             (self.dir / sub).mkdir()
 
-        self.library = Library.create(self.dir / "library", self.game.seed_library,
-                                      usage_path=self.dir / "script_usage.jsonl", run=self.id)
+        self.resumed_from = resume
+        if resume is None:
+            self.library = Library.create(self.dir / "library", self.game.seed_library,
+                                          usage_path=self.dir / "script_usage.jsonl",
+                                          run=self.id)
+        else:
+            self.library = _resume_library(resume, self.dir / "library",
+                                           self.dir / "script_usage.jsonl", self.id)
         self.blockers = BlockerReporter(
             self.dir / "blockers.jsonl", self.id,
             notify=(notify or telegram) if config.notify else None,
         )
         self.rom = self.game.rom_bytes()
-        self.state = self.game.load_start_state()
+        self.state = self.game.load_start_state() if resume is None else resume.state
         (self.dir / "states" / "start.state").write_bytes(self.state)
-        self.frame = 0
-        self.step = 0
+        self.frame = 0 if resume is None else resume.frame
+        self.start_frame = self.frame  # the budget counts this run's frames only
+        self.step = 0 if resume is None else resume.step
         self.kept_steps = 0
         self.watch: dict[str, tuple[int, int, int | None]] = {}
         self.notes = ""  # the main agent's own notes (update_notes), kept across compactions
+        if resume is not None and resume.notes:
+            self.set_notes(resume.notes, agent="main")
         self.llm_calls = 0
         self.tokens = 0
         self.started = time.monotonic()
@@ -115,7 +193,7 @@ class Run:
 
     @property
     def frames_left(self) -> int:
-        return max(0, self.config.frame_budget - self.frame)
+        return max(0, self.config.frame_budget - (self.frame - self.start_frame))
 
     @property
     def minutes(self) -> float:
@@ -297,6 +375,9 @@ class Run:
             "config": asdict(self.config),
             "game": {"name": self.game.name, "rom": str(self.game.rom),
                      "setup_inputs": len(self.game.setup)},
+            "resumed_from": None if self.resumed_from is None else {
+                "run": self.resumed_from.run_dir.name, "step": self.resumed_from.step,
+                "frame": self.resumed_from.frame},
             "model": asdict(self.model),
             "started_at": self.started_at,
             "ended_at": datetime.now(timezone.utc).isoformat() if self.stop_reason else None,
