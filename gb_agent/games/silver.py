@@ -24,7 +24,7 @@ from pathlib import Path
 
 from gb_agent.paths import gb_agent_path
 
-from gb_agent.games import silver_state
+from gb_agent.games import silver_journal, silver_state
 from gb_agent.games.profile import GameProfile, MemRef
 
 _A = "a:4:100"
@@ -57,10 +57,15 @@ SILVER = GameProfile(
     seed_library=Path(__file__).parent / "silver_library",
     notes=(
         "Pokemon Silver for the Game Boy Color. You are SILVER, starting in your "
-        "bedroom upstairs at home in New Bark Town. The in-game time is always 10:00."
+        "bedroom upstairs at home in New Bark Town. The in-game time is always 10:00. "
+        "Walking: pressing a direction you aren't facing only turns you to face it, without "
+        "a step; press it again to walk. So a script that walks somewhere should check "
+        "where it got to rather than count presses."
     ),
     observe=silver_state.observe,
     describe=silver_state.describe,
     read_text=silver_state.text_boxes,
+    remember=silver_journal.remember,
+    recall=silver_journal.recall,
     state_help=silver_state.STATE_HELP,
 )

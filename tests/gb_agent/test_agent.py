@@ -440,3 +440,27 @@ def test_a_run_resumes_from_a_kept_step_of_an_earlier_one(make_run, game, image,
     manifest = json.loads((second.dir / "manifest.json").read_text())
     assert manifest["resumed_from"] == {"run": first.id, "step": 1, "frame": 10}
     assert second.final_state_replays()
+
+
+def test_the_games_journal_is_shown_after_a_clear_and_comes_back_on_resume(
+        make_run, game, image, tmp_path):
+    keeping = replace(
+        game, observe=lambda pyboy: {"frame": pyboy.frame_count},
+        describe=lambda before, after, pressed: "the state",
+        remember=lambda journal, before, after, text: journal.setdefault("steps", []).append(1),
+        recall=lambda journal: f"Steps seen: {len(journal['steps'])}" if journal else "")
+    first = Run(ExperimentConfig(game="test", model="qwen3-vl-2b-local", goal="g",
+                                 frame_budget=300, step=StepLimits(sandbox=SandboxLimits(timeout_s=20))),
+                root=tmp_path / "runs", game=keeping, image=image, notify=None)
+    small = replace(get_profile("qwen3-vl-2b-local"), context_window=1_000)
+    _, model, _ = play(first, [
+        say(call("wait", frames=10)),
+        say(call("wait", frames=10), input_tokens=900),
+        say(text="GOAL: wait"),  # the compaction
+        say(call("wait", frames=10)),
+    ], profile=small)
+    assert "Steps seen: 2" in model.seen[3][1].content[0]["text"]
+    assert first.journal == {"steps": [1, 1, 1]}
+    second = Run(first.config, root=tmp_path / "runs", game=keeping, image=image, notify=None,
+                 resume=ResumePoint.find(first.dir, 2))
+    assert second.journal == {"steps": [1, 1]}

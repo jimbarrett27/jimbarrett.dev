@@ -43,7 +43,12 @@ class TextLog:
 
     def text(self) -> str:
         """Everything seen, as running text."""
-        out = ""
-        for line in self.lines:
-            out += line if not out or out.endswith("-") else " " + line
-        return out
+        return join(self.lines)
+
+
+def join(lines: list[str]) -> str:
+    """Lines of text as running text (a line ending in "-" was broken mid-word)."""
+    out = ""
+    for line in lines:
+        out += line if not out or out.endswith("-") else " " + line
+    return out
