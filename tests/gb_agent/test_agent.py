@@ -305,6 +305,31 @@ def test_compaction_rewrites_the_notes(make_run):
     assert (run.dir / "notes.md").read_text().startswith("Stairs are top right.")
 
 
+def test_compaction_notes_are_cleaned_and_junk_keeps_the_old_ones(make_run):
+    run = make_run()
+    small = replace(get_profile("qwen3-vl-2b-local"), context_window=1_000)
+    reason, model, agent = play(run, [
+        say(call("update_notes", notes="GOAL: find the stairs."), input_tokens=900),
+        say(text="<thought>hmm</thought>GOAL: go downstairs.\nWhere: Players House 2F"),
+        say(call("wait", frames=10), input_tokens=900),
+        say(text="<thought\nall thinking, no notes"),
+        say(call("wait", frames=10)),
+    ], profile=small)
+    assert agent.compactions == 2
+    request = model.seen[1][-1].content
+    assert "GOAL:" in request and "Don't copy the game state" in request
+    assert run.notes == "GOAL: go downstairs."  # the second compaction gave nothing usable
+
+
+def test_update_notes_refuses_notes_that_are_all_junk(make_run):
+    from gb_agent.tools import Tools
+
+    tools = Tools(make_run())
+    assert "were empty once" in tools.call("update_notes", {"notes": "<thought>x</thought>"}).text
+    tools.call("update_notes", {"notes": "<tool_call><parameter=notes>GOAL: west</parameter>"})
+    assert tools.run.notes == "GOAL: west"
+
+
 def test_the_agent_is_asked_to_update_its_notes_regularly(make_run):
     from gb_agent.agent import NOTES_EVERY
 

@@ -24,7 +24,8 @@ from agents.utils import content_to_str
 from gb_agent.emulator import BUTTONS
 from gb_agent.models import ModelProfile
 from gb_agent.run import Run
-from gb_agent.tools import MAX_NOTES, Tools
+from gb_agent.notes import SECTIONS, clean_notes, fit
+from gb_agent.tools import Tools
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +75,9 @@ spends frames."""
 MAIN_CONTEXT = """\
 Your context is limited. When it fills up it's cleared: you'll be asked for a quick \
 summary, and everything else you've seen is forgotten, except your scripts and your \
-notes. Keep your notes up to date with update_notes as you learn things (where you \
-are, how places connect, what works, what you're trying), so you never lose track. \
+notes. Keep your notes up to date with update_notes as you learn things, so you never \
+lose track. Write them in four sections:
+{sections} \
 If something seems impossible with the tools you have, use report_blocker."""
 
 SUBAGENTS = """\
@@ -102,7 +104,7 @@ def system_prompt(notes: str, *, instructions: str | None = None,
     if state_help:
         parts.append(state_help)
     if not instructions:
-        parts.append(MAIN_CONTEXT)
+        parts.append(MAIN_CONTEXT.format(sections=SECTIONS))
         if subagents:
             parts.append(SUBAGENTS)
     parts.append(EVERY_REPLY)
@@ -112,20 +114,21 @@ def system_prompt(notes: str, *, instructions: str | None = None,
     return "\n\n".join(parts)
 
 
-COMPACT_PROMPT = """\
+COMPACT_PROMPT = f"""\
 Your context is nearly full and is about to be cleared. Rewrite your notes: they're \
 all you'll have afterwards, besides your scripts. Keep what's still true, fix anything \
-that's wrong, and add what you've learned: where you are right now, how places \
-connect, what works and what doesn't, what you were doing and what to do next. At \
-most 2000 characters. Reply with the notes only.
+that's wrong, and add what you've learned. Use these sections, in this order:
+{SECTIONS}
+Don't copy the game state (where you are, people, exits, the map grid, party, bag): \
+you'll be shown it fresh. At most 2000 characters. Reply with the notes only, as \
+plain text: no tool call.
 
 Your current notes:
-{notes}"""
+{{notes}}"""
 
 NOTES_CHECK = """\
 Notes check: before carrying on, call update_notes with your notes brought up to \
-date (where you are now, what you've learned, what you're trying). Your current \
-notes:
+date, in the sections GOAL, STORY, MAP, LESSONS. Your current notes:
 {notes}"""
 
 NOTES_EVERY = 15  # the main agent's own calls between notes checks
@@ -353,13 +356,16 @@ class GameAgent:
         request = self.messages + [HumanMessage(COMPACT_PROMPT.format(
             notes=self.run.notes or "(none yet)"))]
         try:
-            notes = content_to_str(self._invoke(self.notes_llm, request,
-                                                purpose="compact").content).strip()
+            reply = content_to_str(self._invoke(self.notes_llm, request,
+                                                purpose="compact").content)
         except Exception:
             logger.exception("compaction failed; keeping the old notes")
-            notes = ""
+            reply = ""
+        notes = fit(clean_notes(reply))
+        if not notes:
+            logger.warning("compaction gave no usable notes; keeping the old ones")
         if notes and self.task is None:
-            self.run.set_notes(notes[:MAX_NOTES], agent=self.name)
+            self.run.set_notes(notes, agent=self.name)
         self.compactions += 1
         self.run.log_agent({"agent": self.name, "kind": "compaction", "notes": notes,
                             "compactions": self.compactions, "step": self.run.step})
