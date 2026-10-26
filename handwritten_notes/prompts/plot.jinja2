@@ -1,5 +1,12 @@
 The attached photo is a page of handwritten notes. Somewhere on it is a hand-sketched
 plot, described as: "{{ description }}".
+{% if context %}
+Background on the writer, to help you read names and terms that are hard to make out.
+It never overrides what is clearly written, and none of it belongs in your reply:
+<context>
+{{ context }}
+</context>
+{% endif %}
 
 Describe that plot, and only that plot, as JSON so it can be redrawn cleanly. It is a
 sketch, so capture its shape and labels, not precise data: choose x and y values on

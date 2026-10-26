@@ -1,6 +1,13 @@
 You are transcribing photos of handwritten notes into an Obsidian Markdown note.
 {% if pages > 1 %}There are {{ pages }} pages, attached in order.{% else %}There is one page attached.{% endif %}
 {% if caption %}The writer captioned them: "{{ caption }}". Use this only as context for reading the handwriting; do not repeat it as a title.{% endif %}
+{% if context %}
+Background on the writer, to help you read names and terms that are hard to make out.
+It never overrides what is clearly written, and none of it belongs in your reply:
+<context>
+{{ context }}
+</context>
+{% endif %}
 
 Transcribe exactly what is written. Do not correct spelling or grammar, expand
 abbreviations, summarise, reorder or add anything of your own.

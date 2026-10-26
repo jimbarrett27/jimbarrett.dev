@@ -99,6 +99,17 @@ survives re-cloning the deploy directory):
 
 Without it, flowchart previews are skipped (logged) and everything else still works.
 
+## Notes context
+
+`_Notes Context.md` at the vault root tells the notes models who's writing: a short
+paragraph about you and what you write about, then the names and jargon they keep
+misreading as bullets under a `## Vocabulary` heading. It is written in Obsidian and
+synced like any other note, so none of it is in this repo
+(`notes_routing/context.py`). The whole note, capped at 1500 characters, goes into
+the handwriting, figure and routing prompts; the vocabulary also goes to Whisper as
+hotwords. It's read on every note, so edits apply without a restart. Without the
+note, everything works exactly as before.
+
 ## Chess panel
 
 `chess_panel/` pushes the ongoing chess.com Daily game between `jimjimjimmyjim`

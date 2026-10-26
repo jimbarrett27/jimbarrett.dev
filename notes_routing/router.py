@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from llm.llm_util import get_llm_response
-from notes_routing import vault_map
+from notes_routing import context, vault_map
 
 PROMPT = Path(__file__).parent / "prompts" / "route.jinja2"
 CONFIDENCE_THRESHOLD = 0.75
@@ -79,6 +79,7 @@ def route(transcript: str, hint: str | None, source: str) -> Route:
         "source": source,
         "folders": folders,
         "hint": hint or "",
+        "context": context.about(),
         "transcript": transcript[:MAX_TRANSCRIPT_CHARS],
     })
     return parse(text, {f.path for f in folders})

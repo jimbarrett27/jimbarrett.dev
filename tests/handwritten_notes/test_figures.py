@@ -72,8 +72,8 @@ flowchart LR
 """
     assert len(redrawn.svgs) == 1
     assert [(images, params) for _, params, images in model.calls] == [
-        ([PAGES[0]], {"description": "ingest to review loop"}),
-        ([PAGES[1]], {"description": "loss falling with epochs"}),
+        ([PAGES[0]], {"description": "ingest to review loop", "context": ""}),
+        ([PAGES[1]], {"description": "loss falling with epochs", "context": ""}),
     ]
 
 
