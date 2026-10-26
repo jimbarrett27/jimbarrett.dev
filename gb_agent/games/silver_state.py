@@ -512,6 +512,9 @@ def _changes(before: dict, after: dict, pressed: list[str]) -> list[str]:
             ahead = (after.get("adjacent") or {}).get(a["facing"], "unknown")
             lines.append(f"didn't move (pressed {pressed_dirs}); "
                          f"facing {a['facing']}, toward: {ahead}")
+    if before.get("naming") and not after.get("naming"):
+        lines.append(f"naming screen closed (the name was \"{before['naming']['name']}\" "
+                     "the last time you saw it)")
     if before["battle"] is None and after["battle"] is not None:
         e = after["battle"]["enemy"]
         lines.append(f"battle started ({after['battle']['kind']}): {e['species']} L{e['level']}")
