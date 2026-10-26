@@ -10,12 +10,12 @@ from dataclasses import dataclass, field
 
 from gb_agent.emulator import BUTTONS
 from gb_agent.library import ScriptError
+from gb_agent.notes import MAX_NOTES, clean_notes
 from gb_agent.run import Run
 from gb_agent.trace import Trace
 
 MAX_TOOL_TEXT = 6_000
 REPEAT_NOTE_AT = 3  # identical calls in a row before saying so
-MAX_NOTES = 2_000
 
 
 @dataclass
@@ -77,9 +77,10 @@ TOOL_SCHEMAS = [
         "length": {"type": "integer", "description": "1-64, default 1"},
         "remove": {"type": "boolean"},
     }, ["label"]),
-    _fn("update_notes", "Replace your notes: facts you want to keep, such as where you are, "
-        "what you've found out, which scripts work, what you're trying. They're shown to you "
-        "word for word every time your context is cleared.", {
+    _fn("update_notes", "Replace your notes: what you're doing (GOAL), what you've been "
+        "told and what's happened (STORY), how places connect (MAP), and what works or "
+        "doesn't (LESSONS). Not the game state: you're shown that after every step. "
+        "They're shown to you every time your context is cleared.", {
         "notes": {"type": "string", "description": "the whole new notes, at most 2000 characters"},
     }, ["notes"]),
     _fn("report_blocker", "Tell Jim (who set this up) that something seems impossible with "
@@ -373,13 +374,16 @@ class Tools:
                                     for c in self.run.library.history(name)))
 
     def _update_notes(self, args: dict) -> ToolResult:
-        notes = _str(args, "notes").strip()
+        notes = clean_notes(_str(args, "notes"))
+        if not notes:
+            raise ToolError("those notes were empty once thinking, tool-call markup and "
+                            "map grids were taken out; write the notes as plain text")
         if len(notes) > MAX_NOTES:
             raise ToolError(f"notes are limited to {MAX_NOTES} characters (these are "
                             f"{len(notes)}); keep what matters most")
         self.run.set_notes(notes, agent=self.agent)
-        return ToolResult(f"Notes saved ({len(notes)} characters). You'll see them again, "
-                          "word for word, whenever your context is cleared.")
+        return ToolResult(f"Notes saved ({len(notes)} characters). You'll see them again "
+                          "whenever your context is cleared.")
 
     # -- sub-agents ---------------------------------------------------------
 
