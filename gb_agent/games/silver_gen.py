@@ -43,6 +43,9 @@ SYMBOLS = [
     "wPartyMon1Level", "wPartyMon1Status", "wPartyMon1HP", "wPartyMon1MaxHP",
     "wBattleMonSpecies", "wBattleMonLevel", "wBattleMonHP", "wBattleMonMaxHP",
     "wEnemyMonSpecies", "wEnemyMonLevel", "wEnemyMonHP", "wEnemyMonMaxHP",
+    # the naming screen (a union with other screens' data: only read while it's up)
+    "wNamingScreenDestinationPointer", "wNamingScreenCurNameLength",
+    "wNamingScreenMaxNameLength", "wNamingScreenCursorObjectPointer", "wNamingScreenLetterCase",
 ]
 CONSTANTS = ["NUM_OBJECT_STRUCTS", "PARTY_LENGTH", "NUM_MOVES"]
 

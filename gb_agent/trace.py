@@ -146,9 +146,12 @@ def summarize_inputs(events: list[dict]) -> str:
         return "no buttons pressed"
     counts = Counter(presses)
     order = list(dict.fromkeys(presses))
-    held, pressed_at = [], {}
+    held, pressed_at, again = [], {}, Counter()
     for event in events:
         if event["type"] == "press":
+            if event["button"] in pressed_at:
+                again[event["button"]] += 1
+                continue
             pressed_at[event["button"]] = event["frame"]
         elif event["type"] == "release" and event["button"] in pressed_at:
             held.append(event["frame"] - pressed_at.pop(event["button"]))
@@ -157,6 +160,10 @@ def summarize_inputs(events: list[dict]) -> str:
         text += f" (held ~{round(sum(held) / len(held))} frames)"
     if pressed_at:
         text += f"; still held: {', '.join(sorted(pressed_at))}"
+    if again:
+        text += ("; pressed again while still held, without a release in between: "
+                 + ", ".join(f"{button} ×{n}" for button, n in again.items())
+                 + " (the game sees one long press: a new press needs a release first)")
     return text
 
 

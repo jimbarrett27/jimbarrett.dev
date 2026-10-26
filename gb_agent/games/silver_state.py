@@ -15,6 +15,7 @@ the game keeps in RAM, exactly as the game does when the player moves.
 """
 
 import heapq
+import re
 
 from pyboy import PyBoy
 
@@ -112,6 +113,39 @@ def text_boxes(pb: PyBoy) -> list[list[str]]:
             if lines := [line for line in lines if line]:
                 boxes.append(lines)
     return boxes
+
+
+# The naming screen's cursor is a sprite; its column and row are SPRITEANIMSTRUCT_VAR1
+# and _VAR2 of the struct wNamingScreenCursorObjectPointer points at
+# (constants/sprite_anim_constants.asm). Rows 0-3 are letters, nine across, two tiles
+# apart from tile (2, 8); row 4 is the bottom row: lower/UPPER, DEL, END, three each.
+_CURSOR_COL, _CURSOR_ROW = 0x0C, 0x0D
+_BOTTOM_ROW = ("case", "DEL", "END")
+_NAMING_BOTTOM = re.compile(r"\b(?:lower|UPPER)\s+DEL\s+END\b")
+
+
+def _naming(pb: PyBoy) -> dict | None:
+    """The naming screen, if it's up: what's being named, the name so far, the cursor."""
+    row = lambda r: "".join(CHARMAP.get(pb.memory[S["wTilemap"] + r * 20 + c], " ")  # noqa: E731
+                            for c in range(20))
+    bottom = row(16)
+    if not _NAMING_BOTTOM.search(bottom):
+        return None
+    cursor = _le16(pb, S["wNamingScreenCursorObjectPointer"])
+    col, crow = pb.memory[cursor + _CURSOR_COL], pb.memory[cursor + _CURSOR_ROW]
+    if crow >= 4:
+        under = _BOTTOM_ROW[min(col // 3, 2)]
+        if under == "case":
+            under = "lower" if "lower" in bottom else "UPPER"
+    else:
+        under = row(8 + 2 * crow)[2 + 2 * col].strip() or "a blank (types a space)"
+    length = _u8(pb, "wNamingScreenCurNameLength")
+    dest = _le16(pb, S["wNamingScreenDestinationPointer"])
+    name = "".join(CHARMAP.get(pb.memory[dest + i], "?") for i in range(length))
+    title = " ".join(" ".join(row(r).strip("■ ").replace("♂", "").replace("♀", "").split())
+                     for r in range(1, 6) if row(r).strip("■ "))
+    return {"title": title.strip(), "name": name, "max": _u8(pb, "wNamingScreenMaxNameLength"),
+            "cursor": under, "column": col, "row": crow}
 
 
 def _people(pb: PyBoy) -> list[dict]:
@@ -395,6 +429,7 @@ def observe(pb: PyBoy) -> dict:
     # so a report that lands mid-step would otherwise show the old tile.
     x, y = _u8(pb, "wPlayerMapX") - COORD_OFFSET, _u8(pb, "wPlayerMapY") - COORD_OFFSET
     battle = _battle(pb)
+    naming = None if battle else _naming(pb)
     obs = {
         "map": {"group": group, "number": number, "name": map_name(group, number),
                 "width": _u8(pb, "wMapWidth") * 2, "height": _u8(pb, "wMapHeight") * 2},
@@ -408,8 +443,9 @@ def observe(pb: PyBoy) -> dict:
         "bag": _bag(pb),
         "money": int.from_bytes(bytes(pb.memory[S["wMoney"] + i] for i in range(3)), "big"),
         "badges": bin(_u8(pb, "wJohtoBadges")).count("1"),
+        "naming": naming,
     }
-    if battle is None:  # in battle the map buffers hold battle graphics, not the map
+    if battle is None and naming is None:  # the map buffers hold the map only out here
         people = _people(pb)
         exits, things = _events(pb)
         loaded = _map_loaded(pb, x, y, exits)
@@ -457,10 +493,25 @@ def _changes(before: dict, after: dict, pressed: list[str]) -> list[str]:
         lines.append(f"moved: ({b['x']}, {b['y']}) -> ({a['x']}, {a['y']})")
     elif b["facing"] != a["facing"]:
         lines.append(f"turned to face {a['facing']}, without moving")
+    elif after.get("naming"):
+        n, old = after["naming"], before.get("naming")
+        if old is None:
+            lines.append("naming screen opened")
+        else:
+            if n["name"] != old["name"]:
+                lines.append(f"name: \"{old['name']}\" -> \"{n['name']}\"")
+            if (n["column"], n["row"]) != (old["column"], old["row"]):
+                lines.append(f"cursor moved to: {n['cursor']}")
     elif after["battle"] is None and (dirs := [p for p in pressed if p in STEP]):
-        ahead = (after.get("adjacent") or {}).get(a["facing"], "unknown")
-        lines.append(f"didn't move (pressed {', '.join(dict.fromkeys(dirs))}); "
-                     f"facing {a['facing']}, toward: {ahead}")
+        pressed_dirs = ", ".join(dict.fromkeys(dirs))
+        if after["script_running"]:
+            lines.append(f"didn't move (pressed {pressed_dirs}): a cutscene or conversation "
+                         "has control, so you can't walk until it ends. Someone may be "
+                         "walking up to you; wait, or press A to move the text on")
+        else:
+            ahead = (after.get("adjacent") or {}).get(a["facing"], "unknown")
+            lines.append(f"didn't move (pressed {pressed_dirs}); "
+                         f"facing {a['facing']}, toward: {ahead}")
     if before["battle"] is None and after["battle"] is not None:
         e = after["battle"]["enemy"]
         lines.append(f"battle started ({after['battle']['kind']}): {e['species']} L{e['level']}")
@@ -500,6 +551,16 @@ def describe(before: dict | None, after: dict, pressed: list[str] = ()) -> str:
     if before is not None:
         changes = _changes(before, after, list(pressed))
         lines.append("Changes: " + ("; ".join(changes) if changes else "none"))
+    if n := after.get("naming"):  # the map's still loaded underneath, but it's not on screen
+        return "\n".join(lines + [
+            f"Mode: naming screen ({n['title']})",
+            f"Name so far: \"{n['name']}\" ({len(n['name'])} of {n['max']} letters)",
+            f"Cursor on: {n['cursor']}",
+            "Here: the d-pad moves the cursor; A types the letter under it (or does what "
+            "lower/UPPER, DEL or END says); B deletes a letter; START jumps to END; END with "
+            "no name keeps the usual one. Each A or B counts only if it's a fresh press: "
+            "release the button between presses.",
+        ])
     lines.append(f"Where: {m['name']} ({m['width']}x{m['height']} tiles), you're at "
                  f"({p['x']}, {p['y']}) facing {p['facing']}"
                  + (" (mid-step)" if p["walking"] else ""))

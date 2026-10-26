@@ -66,6 +66,11 @@ SYMBOLS = {
     'wEnemyMonLevel': 0xD0FC,
     'wEnemyMonHP': 0xD0FF,
     'wEnemyMonMaxHP': 0xD101,
+    'wNamingScreenDestinationPointer': 0xC5D0,
+    'wNamingScreenCurNameLength': 0xC5D2,
+    'wNamingScreenMaxNameLength': 0xC5D3,
+    'wNamingScreenCursorObjectPointer': 0xC5D5,
+    'wNamingScreenLetterCase': 0xCE64,
 }
 
 CONSTANTS = {
