@@ -51,3 +51,23 @@ pre { margin: 0; background: var(--color-white); border: 1px solid var(--color-g
 .about h2 { font-size: 1.25rem; font-weight: 700; letter-spacing: 0; color: var(--color-black); margin-bottom: .5rem; }
 
 @media (max-width: 480px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.facts { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; margin: 0; font-size: .875rem; }
+.facts dt { display: inline; font-size: .75rem; color: var(--color-gray); margin-right: .4rem; }
+.facts dd { display: inline; }
+.badge-row { letter-spacing: .1em; }
+.party { list-style: none; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: .5rem; }
+.party li { display: flex; gap: .6rem; align-items: center; background: var(--color-white);
+  border: 1px solid var(--color-gray-light); border-radius: 6px; padding: .4rem .6rem; }
+.sprite { flex: 0 0 56px; height: 56px; }
+.sprite img { display: block; image-rendering: pixelated; }
+.mon { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .2rem; font-size: .875rem; overflow-wrap: anywhere; }
+.mon-head { margin: 0; display: flex; flex-wrap: wrap; gap: 0 .5rem; align-items: baseline; }
+.lv, .status-tag, .hp-text, summary { font-size: .75rem; }
+.lv, .hp-text, summary { color: var(--color-gray); }
+.hp { display: flex; align-items: center; gap: .5rem; }
+.hp-track { flex: 1; height: .5rem; background: var(--color-gray-light); border-radius: 999px; overflow: hidden; }
+.hp-fill { display: block; height: 100%; background: currentColor; transition: width .4s; }
+summary { cursor: pointer; }
+.moves { margin: .2rem 0 0; font-size: .8rem; }
+

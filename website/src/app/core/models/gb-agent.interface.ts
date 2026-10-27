@@ -26,6 +26,46 @@ export interface GbAgentClip {
   args?: string | null;
   /** Unix seconds the step finished. */
   time?: number;
+  /** Where the player was at the end of the step; null when the run has no state report. */
+  pos?: GbAgentPos | null;
+  /** The game at the end of the step, only where it changed since the clip before
+   *  (and always on the first clip listed): carry the last one forward. */
+  state?: GbAgentState | null;
+}
+
+export interface GbAgentPos {
+  /** `<group>-<number>`: the key of the map's file under `runs/<run>/maps/`. */
+  map: string;
+  x?: number;
+  y?: number;
+  facing?: string;
+}
+
+export interface GbAgentMove {
+  name: string;
+  pp?: number;
+}
+
+export interface GbAgentMon {
+  species: string;
+  /** National Pokédex number. */
+  dex?: number;
+  nickname?: string;
+  level?: number;
+  hp?: number;
+  max_hp?: number;
+  /** "" when healthy; else asleep, poisoned, burned, frozen or paralysed. */
+  status?: string;
+  moves?: GbAgentMove[];
+}
+
+export interface GbAgentState {
+  map_name?: string | null;
+  trainer?: { name?: string; rival?: string } | null;
+  party?: GbAgentMon[] | null;
+  money?: number | null;
+  badges?: number | null;
+  dex?: { caught?: number; seen?: number } | null;
 }
 
 export interface GbAgentToolCall {
@@ -106,6 +146,17 @@ export interface GbAgentSubagent {
   tools?: string[];
   scripts?: string[];
   model?: string;
+}
+
+/** `runs/<run>/maps/<group>-<number>.json` — a whole map, for the mini-map. */
+export interface GbAgentMap {
+  name?: string;
+  width: number;
+  height: number;
+  /** One string per row, one character per tile: `.` floor, `#` wall, `~` water,
+   *  `g` grass, `v < >` ledges. */
+  rows: string[];
+  exits?: { x: number; y: number; to?: string }[];
 }
 
 /** `runs/<run>/scripts.json` — the run's script library and sub-agent specs. */

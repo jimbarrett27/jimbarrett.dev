@@ -6,9 +6,12 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, catchError, exhaustMap, fromEvent, map, merge, of, switchMap, timer } from 'rxjs';
 import { GbAgentService } from '../../core/services/gb-agent.service';
 import {
-  GbAgentClip, GbAgentLive, GbAgentNotes, GbAgentScripts,
+  GbAgentClip, GbAgentLive, GbAgentMap, GbAgentMon, GbAgentNotes, GbAgentScripts,
 } from '../../core/models/gb-agent.interface';
-import { gameTime, notesHtml, scriptCall, toTurns } from './gb-agent.format';
+import {
+  gameTime, hpBar, monName, notesHtml, scriptCall, spriteUrl, toTurns, withState,
+} from './gb-agent.format';
+import { GbAgentMapComponent } from './gb-agent-map.component';
 
 const LIVE_POLL_MS = 4_000;
 const IDLE_POLL_MS = 60_000;
@@ -21,12 +24,13 @@ const MAX_BEHIND_S = 60;
 /**
  * The gb_agent bot playing Pokémon, as it happens. Polls the publisher's files
  * in the bucket and plays each kept step's clip back to back at game speed,
- * next to a log of what the model said and did, its notes and its scripts.
+ * next to a log of what the model said and did, its notes and its scripts, and
+ * the game as it stands at the end of the clip on screen: party, trainer and map.
  */
 @Component({
   selector: 'app-gb-agent',
   standalone: true,
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, GbAgentMapComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './gb-agent.component.html',
   styleUrl: './gb-agent.component.css',
@@ -61,6 +65,20 @@ export class GbAgentComponent {
   readonly caption = computed(() => {
     const clip = this.playing();
     return clip ? `step ${clip.step} · ${scriptCall(clip.script, clip.args)}` : '';
+  });
+
+  /** The game at the end of the clip on screen, so it changes as the video does. */
+  readonly game = computed(() => this.playing()?.state ?? null);
+  readonly party = computed(() => (this.game()?.party ?? []).map(m => ({
+    ...m, name: monName(m), sprite: spriteUrl(m.dex), bar: hpBar(m),
+  })));
+  readonly pos = computed(() => this.playing()?.pos ?? null);
+  /** Layouts of the maps seen so far, by `pos.map`. */
+  private readonly maps = signal<Record<string, GbAgentMap>>({});
+  private readonly mapsAsked = new Set<string>();
+  readonly map = computed(() => {
+    const key = this.pos()?.map;
+    return key ? this.maps()[key] ?? null : null;
   });
 
   /** The script whose code is shown; the most used one until a tab is picked. */
@@ -100,6 +118,20 @@ export class GbAgentComponent {
     ).subscribe();
   }
 
+  /** "◆◆◇◇◇◇◇◇" for badges won of the eight. */
+  badges(n: number | null | undefined): string {
+    const won = Math.max(0, Math.min(8, n ?? 0));
+    return '◆'.repeat(won) + '◇'.repeat(8 - won);
+  }
+
+  movesOf(m: GbAgentMon): string {
+    return (m.moves ?? []).map(mv => mv.pp !== undefined ? `${mv.name} ${mv.pp}pp` : mv.name).join(' · ');
+  }
+
+  hideImage(event: Event): void {
+    (event.target as HTMLElement).style.visibility = 'hidden';
+  }
+
   clipUrl(clip: GbAgentClip): string {
     return this.api.clipUrl(clip.key);
   }
@@ -121,6 +153,18 @@ export class GbAgentComponent {
     this.holding.set(false);
     this.queue.set(rest);
     this.playing.set(head);
+    this.loadMap(head.pos?.map);
+  }
+
+  private loadMap(key: string | undefined): void {
+    const run = this.run;
+    if (!key || !run || this.mapsAsked.has(key)) return;
+    this.mapsAsked.add(key);
+    this.api.getMap(run, key).subscribe({
+      next: m => { if (this.run === run) this.maps.update(all => ({ ...all, [key]: m })); },
+      // Not published yet (say the map was first seen in a battle): ask again later.
+      error: () => this.mapsAsked.delete(key),
+    });
   }
 
   private poll() {
@@ -143,6 +187,8 @@ export class GbAgentComponent {
     this.notes.set(null);
     this.scripts.set(null);
     this.picked.set(null);
+    this.maps.set({});
+    this.mapsAsked.clear();
   }
 
   private apply(live: GbAgentLive): void {
@@ -156,7 +202,7 @@ export class GbAgentComponent {
     if (live.scripts_version && live.scripts_version !== prev?.scripts_version) {
       this.api.getScripts(run).subscribe({ next: s => this.scripts.set(s), error: () => undefined });
     }
-    this.enqueue(live.clips ?? [], live.fps ?? 60);
+    this.enqueue(withState(live.clips ?? []), live.fps ?? 60);
   }
 
   private enqueue(clips: GbAgentClip[], fps: number): void {

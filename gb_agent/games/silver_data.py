@@ -49,6 +49,11 @@ SYMBOLS = {
     'wBalls': 0xD5FD,
     'wNumKeyItems': 0xD5E1,
     'wKeyItems': 0xD5E2,
+    'wPlayerName': 0xD1A3,
+    'wRivalName': 0xD1B9,
+    'wPokedexCaught': 0xDBE4,
+    'wEndPokedexCaught': 0xDC04,
+    'wPokedexSeen': 0xDC04,
     'wPartyCount': 0xDA22,
     'wPartyMon1': 0xDA2A,
     'wPartyMon2': 0xDA5A,
@@ -58,6 +63,7 @@ SYMBOLS = {
     'wPartyMon1Status': 0xDA4A,
     'wPartyMon1HP': 0xDA4C,
     'wPartyMon1MaxHP': 0xDA4E,
+    'wPartyMonNicknames': 0xDB8C,
     'wBattleMonSpecies': 0xCB0C,
     'wBattleMonLevel': 0xCB19,
     'wBattleMonHP': 0xCB1C,
@@ -77,6 +83,8 @@ CONSTANTS = {
     'NUM_OBJECT_STRUCTS': 13,
     'PARTY_LENGTH': 6,
     'NUM_MOVES': 4,
+    'NAME_LENGTH': 11,
+    'MON_NAME_LENGTH': 11,
 }
 
 CHARMAP = {

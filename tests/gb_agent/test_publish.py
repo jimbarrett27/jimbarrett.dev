@@ -37,7 +37,7 @@ class FakeRun:
         with (self.dir / name).open("a") as f:
             f.write(json.dumps(record) + "\n")
 
-    def kept_step(self, frames: int):
+    def kept_step(self, frames: int, observation: dict | None = None):
         self.step += 1
         pyboy = boot(self.rom, self.state)
         game = RecordingGame(pyboy)
@@ -51,7 +51,8 @@ class FakeRun:
         used = game.frame
         self.append("steps.jsonl", {"step": self.step, "agent": "main", "kept": True,
                                     "script": "mash", "args": {"times": 1}, "frames": used,
-                                    "start_frame": self.frame, "time": time.time()})
+                                    "start_frame": self.frame, "time": time.time(),
+                                    "observation": observation})
         self.frame += used
         return used
 
@@ -156,6 +157,69 @@ def test_steps_that_only_look_have_no_clip(run, dest):
     run.kept_step(20)
     publisher(run, dest).sync()
     assert [c["step"] for c in read(dest, f"runs/{run.dir.name}/live.json")["clips"]] == [2]
+
+
+def _obs(map_number=1, x=3, hp=20, grid=True):
+    return {"map": {"group": 24, "number": map_number, "name": f"Map {map_number}"},
+            "player": {"x": x, "y": 4, "facing": "left", "walking": False},
+            "trainer": {"name": "SILVER", "rival": "???"}, "money": 3000, "badges": 0,
+            "dex": {"caught": 1, "seen": 2}, "battle": None, "text": [],
+            "party": [{"species": "Cyndaquil", "dex": 155, "nickname": "CYNDAQUIL",
+                       "level": 6, "hp": hp, "max_hp": 21, "status": "", "moves": []}],
+            "grid": {"left": 0, "top": 0, "rows": []} if grid else None}
+
+
+def test_clips_carry_the_game_state_only_where_it_changes(run, dest):
+    run.kept_step(20, _obs(x=3))
+    run.kept_step(20, _obs(x=4))  # walked: same state, new position
+    run.kept_step(20, _obs(x=4, hp=12))  # hurt
+    publisher(run, dest).sync()
+
+    clips = read(dest, f"runs/{run.dir.name}/live.json")["clips"]
+    assert [c["pos"] for c in clips] == [{"map": "24-1", "x": x, "y": 4, "facing": "left"}
+                                          for x in (3, 4, 4)]
+    assert clips[0]["state"]["trainer"] == {"name": "SILVER", "rival": "???"}
+    assert clips[0]["state"]["map_name"] == "Map 1"
+    assert "state" not in clips[1]
+    assert clips[2]["state"]["party"][0]["hp"] == 12
+    assert "grid" not in clips[0]["state"] and "text" not in clips[0]["state"]
+
+
+def test_the_oldest_listed_clip_always_has_the_state(run, dest):
+    for _ in range(3):
+        run.kept_step(60, _obs())
+    publisher(run, dest, keep_minutes=2.5 / 60).sync()  # the first clip leaves the bucket
+
+    clips = read(dest, f"runs/{run.dir.name}/live.json")["clips"]
+    assert [c["step"] for c in clips] == [2, 3]
+    assert clips[0]["state"]["party"][0]["species"] == "Cyndaquil"
+
+
+def test_steps_without_an_observation_have_no_state(run, dest):
+    run.kept_step(20)
+    publisher(run, dest).sync()
+    clip = read(dest, f"runs/{run.dir.name}/live.json")["clips"][0]
+    assert clip["pos"] is None and clip["state"] is None
+
+
+def test_each_map_is_published_once_when_it_can_be_read(run, dest):
+    calls = []
+
+    def layout(pyboy):
+        calls.append(1)
+        return None if len(calls) == 1 else {"width": 2, "height": 1, "rows": [".."]}
+
+    run.kept_step(20, _obs(map_number=1, grid=False))  # in a battle: not tried
+    run.kept_step(20, _obs(map_number=1))  # tried, but the buffer isn't the map yet
+    run.kept_step(20, _obs(map_number=1))
+    run.kept_step(20, _obs(map_number=1))  # already there
+    run.kept_step(20, _obs(map_number=2))
+    publisher(run, dest, map_layout=layout).sync()
+
+    maps = dest.root / "runs" / run.dir.name / "maps"
+    assert sorted(p.name for p in maps.iterdir()) == ["24-1.json", "24-2.json"]
+    assert read(dest, f"runs/{run.dir.name}/maps/24-1.json")["rows"] == [".."]
+    assert len(calls) == 3
 
 
 def test_notes_and_scripts_are_published_with_versions(run, dest):

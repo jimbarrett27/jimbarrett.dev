@@ -12,7 +12,7 @@ import pytest
 from gb_agent.emulator import apply_event, boot, save_state
 from gb_agent.games import SILVER
 from gb_agent.games.silver_data import SYMBOLS
-from gb_agent.games.silver_state import STEP, _tile, describe, observe, text_boxes
+from gb_agent.games.silver_state import STEP, _tile, describe, map_layout, observe, text_boxes
 from gb_agent.steps import replay as replay_step
 from gb_agent.text_log import TextLog
 
@@ -140,6 +140,36 @@ def test_elms_lab_with_the_starters_on_the_table(replay):
     assert {"x": 6, "y": 1, "what": "bookshelf"} in obs["things"]
     assert obs["party"][0]["species"] == "Cyndaquil"
     assert [m["name"] for m in obs["party"][0]["moves"]] == ["Tackle", "Leer"]
+
+
+def test_names_and_the_pokedex(replay):
+    start, _ = replay[0]
+    assert start["dex"] == {"caught": 0, "seen": 0}
+    obs, _ = replay[262]  # Cyndaquil, and a wild Pidgey in front of it
+    assert obs["trainer"] == {"name": "SILVER", "rival": "???"}  # the rival isn't named yet
+    assert obs["party"][0]["nickname"] == "CYNDAQUIL"  # never nicknamed
+    assert obs["party"][0]["dex"] == 155
+    assert obs["dex"]["caught"] == 1 and obs["dex"]["seen"] >= 2
+
+
+def test_the_whole_map_for_the_mini_map(silver_rom):
+    pyboy = _replayed(silver_rom, 0)
+    try:
+        layout = map_layout(pyboy)
+    finally:
+        pyboy.stop(save=False)
+    assert (layout["name"], layout["width"], layout["height"]) == ("Players House 2F", 8, 6)
+    assert len(layout["rows"]) == 6 and all(len(row) == 8 for row in layout["rows"])
+    assert layout["rows"][3][3] == "."  # where the player stands
+    assert layout["exits"] == [{"x": 7, "y": 0, "to": "Players House 1F"}]
+
+
+def test_no_mini_map_in_a_battle(silver_rom):
+    pyboy = _replayed(silver_rom, 262)
+    try:
+        assert map_layout(pyboy) is None
+    finally:
+        pyboy.stop(save=False)
 
 
 def test_a_wild_battle(replay):

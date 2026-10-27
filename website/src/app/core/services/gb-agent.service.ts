@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
-  GbAgentCurrent, GbAgentLive, GbAgentNotes, GbAgentScripts,
+  GbAgentCurrent, GbAgentLive, GbAgentMap, GbAgentNotes, GbAgentScripts,
 } from '../models/gb-agent.interface';
 
 /**
@@ -37,6 +37,11 @@ export class GbAgentService {
   /** Fetched only when `live.json`'s `scripts_version` changes. */
   getScripts(run: string): Observable<GbAgentScripts> {
     return this.http.get<GbAgentScripts>(`${this.base}/runs/${run}/scripts.json`);
+  }
+
+  /** A map's layout, by the `map` key of a clip's `pos`; fetched once per map. */
+  getMap(run: string, key: string): Observable<GbAgentMap> {
+    return this.http.get<GbAgentMap>(`${this.base}/runs/${run}/maps/${key}.json`);
   }
 
   /** A clip's URL from its bucket-relative key. Clips are immutable. */

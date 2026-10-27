@@ -14,13 +14,20 @@ The bucket layout is the website's contract (``gb-agent.interface.ts``):
     runs/<run>/notes.json           {version, notes}
     runs/<run>/scripts.json         {version, scripts, subagents}
     runs/<run>/clips/stepNNNNN.mp4  one clip per kept step, at game speed; immutable
+    runs/<run>/maps/<group>-<number>.json
+                                    the whole of each map the run has been on, for
+                                    the page's mini-map
 
 ``live.json`` carries ``notes_version`` and ``scripts_version`` so the page only
-refetches those two when they change. Only the newest ``--keep-minutes`` of game
-time stays in the bucket; every clip is also kept in ``<run>/clips/`` at home, so
-the run directory remains the full record. Tool results go out as the agent saw
-them, so the game-state description (map, position, party) is public too; save
-states, events and the ROM never are.
+refetches those two when they change. Each clip in it has the game state at the end
+of its step, read from the step's observation: ``pos`` (map and tile) on every clip,
+and ``state`` (trainer, party, money, badges, Pokedex) only where it differs from the
+clip before, and always on the first, so walking about doesn't repeat the party.
+
+Only the newest ``--keep-minutes`` of game time stays in the bucket; every clip is
+also kept in ``<run>/clips/`` at home, so the run directory remains the full record.
+Tool results go out as the agent saw them, so the game-state description (map,
+position, party) is public too; save states, events and the ROM never are.
 """
 
 import argparse
@@ -33,6 +40,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
 
+from gb_agent.emulator import boot
 from gb_agent.games import GAMES
 from gb_agent.library import Library
 from gb_agent.replay import FPS, render_video
@@ -142,6 +150,36 @@ def _activity(record: dict) -> dict | None:
     return None
 
 
+def _pos(obs: dict | None) -> dict | None:
+    """Where the player is, for the mini-map."""
+    if not obs or "map" not in obs:
+        return None
+    player = obs.get("player") or {}
+    return {"map": f"{obs['map']['group']}-{obs['map']['number']}", "x": player.get("x"),
+            "y": player.get("y"), "facing": player.get("facing")}
+
+
+def _game_state(obs: dict | None) -> dict | None:
+    """The part of an observation the page shows next to the video."""
+    if not obs:
+        return None
+    return {"map_name": (obs.get("map") or {}).get("name"), "trainer": obs.get("trainer"),
+            "party": obs.get("party"), "money": obs.get("money"), "badges": obs.get("badges"),
+            "dex": obs.get("dex")}
+
+
+def _listed(clips: list[dict]) -> list[dict]:
+    """Clips for live.json, each ``state`` dropped where it repeats the one before."""
+    listed, shown = [], None
+    for clip in clips:
+        state = clip.get("state")
+        if state is not None and state == shown:
+            clip = {k: v for k, v in clip.items() if k != "state"}
+        shown = state if state is not None else shown
+        listed.append(clip)
+    return listed
+
+
 def _version(*parts) -> str:
     return hashlib.sha1(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()[:12]
 
@@ -154,14 +192,16 @@ class RunPublisher:
     """Keeps one run's files in ``dest`` up to date; call ``sync()`` repeatedly."""
 
     def __init__(self, run_dir: Path, dest: Destination, *, keep_minutes: float = 240,
-                 rom: bytes | None = None):
+                 rom: bytes | None = None, map_layout=None):
         self.dir = Path(run_dir)
         self.id = self.dir.name
         self.dest = dest
         self.keep_frames = int(keep_minutes * 60 * FPS)
         self.prefix = f"runs/{self.id}"
         manifest = self._manifest()
-        self.rom = rom if rom is not None else GAMES[manifest["config"]["game"]].rom_bytes()
+        game = GAMES[manifest["config"]["game"]]
+        self.rom = rom if rom is not None else game.rom_bytes()
+        self.map_layout = map_layout or game.map_layout
         self.library = Library(self.dir / "library")
         (self.dir / "clips").mkdir(exist_ok=True)
 
@@ -185,6 +225,7 @@ class RunPublisher:
         self._deleted: set[int] = set(record.get("deleted", []))
         self._sent: dict[str, str] = {}  # key -> version of the last upload this session
         self._scripts_version: str | None = None
+        self._maps: set[str] = set()  # maps uploaded this session
 
     # -- reading the run ----------------------------------------------------
 
@@ -225,12 +266,39 @@ class RunPublisher:
             self._uploaded.add(n)
         self._pending.pop(n, None)
         self._state = self.dir / "states" / f"step{n:05d}.state"
+        obs = step.get("observation")
         self.clips.append({"step": n, "key": self._clip_key(n), "frames": step.get("frames"),
                            "start_frame": step.get("start_frame"), "agent": step.get("agent"),
                            "script": step.get("script"),
                            "args": _cap(step.get("args"), RESULT_CAP) if step.get("args") else None,
-                           "time": step.get("time")})
+                           "time": step.get("time"), "pos": _pos(obs), "state": _game_state(obs)})
+        self._add_map(obs, self._state)
         return uploaded
+
+    def _add_map(self, obs: dict | None, state: Path) -> None:
+        """Upload the layout of the map a step ended on, the first time it's seen.
+
+        The observation's grid says whether the map buffer held the map (it doesn't
+        in a battle); if it didn't, the map waits for a later step.
+        """
+        pos = _pos(obs)
+        if self.map_layout is None or pos is None or pos["map"] in self._maps \
+                or obs.get("grid") is None:
+            return
+        try:
+            pyboy = boot(self.rom, state.read_bytes())
+            try:
+                layout = self.map_layout(pyboy)
+            finally:
+                pyboy.stop(save=False)
+        except Exception:
+            logger.exception("couldn't read map %s", pos["map"])
+            return
+        if layout is None:
+            return
+        self.dest.put(f"{self.prefix}/maps/{pos['map']}.json", _json(layout),
+                      "application/json", NO_CACHE)
+        self._maps.add(pos["map"])
 
     def _prune(self) -> None:
         """Delete clips that fall outside the newest ``keep_frames`` of game time."""
@@ -321,7 +389,7 @@ class RunPublisher:
             "frame": manifest.get("frame"), "frame_budget": manifest["config"].get("frame_budget"),
             "steps": manifest.get("steps"), "kept_steps": manifest.get("kept_steps"),
             "llm_calls": manifest.get("llm_calls"), "minutes": manifest.get("minutes"),
-            "fps": FPS, "clips": published,
+            "fps": FPS, "clips": _listed(published),
             "activity": list(self.activity), "waiting_since": self.waiting_since,
             "script_uses": dict(self.script_uses),
             "notes_version": notes_version, "scripts_version": self._scripts_version,
