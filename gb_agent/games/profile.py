@@ -69,6 +69,9 @@ class GameProfile:
     remember: Callable[[dict, dict | None, dict, list[str]], None] | None = None
     recall: Callable[[dict], str] | None = None
     state_help: str = ""
+    # map_layout(pyboy) -> the whole current map for the live page's mini-map, or None
+    # when it can't be read; the publisher calls it, the agent never sees it.
+    map_layout: Callable[[PyBoy], dict | None] | None = None
 
     def rom_bytes(self) -> bytes:
         if not self.rom.exists():

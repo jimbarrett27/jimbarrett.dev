@@ -38,16 +38,19 @@ SYMBOLS = [
     # what you carry
     "wMoney", "wJohtoBadges", "wNumItems", "wItems", "wNumBalls", "wBalls",
     "wNumKeyItems", "wKeyItems",
+    # who you are, and the Pokedex (seen/caught: one bit per species)
+    "wPlayerName", "wRivalName", "wPokedexCaught", "wEndPokedexCaught", "wPokedexSeen",
     # party structs, and the two Pokemon in a battle
     "wPartyCount", "wPartyMon1", "wPartyMon2", "wPartyMon1Moves", "wPartyMon1PP",
     "wPartyMon1Level", "wPartyMon1Status", "wPartyMon1HP", "wPartyMon1MaxHP",
+    "wPartyMonNicknames",
     "wBattleMonSpecies", "wBattleMonLevel", "wBattleMonHP", "wBattleMonMaxHP",
     "wEnemyMonSpecies", "wEnemyMonLevel", "wEnemyMonHP", "wEnemyMonMaxHP",
     # the naming screen (a union with other screens' data: only read while it's up)
     "wNamingScreenDestinationPointer", "wNamingScreenCurNameLength",
     "wNamingScreenMaxNameLength", "wNamingScreenCursorObjectPointer", "wNamingScreenLetterCase",
 ]
-CONSTANTS = ["NUM_OBJECT_STRUCTS", "PARTY_LENGTH", "NUM_MOVES"]
+CONSTANTS = ["NUM_OBJECT_STRUCTS", "PARTY_LENGTH", "NUM_MOVES", "NAME_LENGTH", "MON_NAME_LENGTH"]
 
 
 def symbols(pokegold: Path) -> dict[str, int]:
@@ -64,7 +67,7 @@ def symbols(pokegold: Path) -> dict[str, int]:
 def constants(pokegold: Path) -> dict[str, int]:
     found = {}
     for path in (pokegold / "constants").glob("*.asm"):
-        for m in re.finditer(r"DEF (\w+) EQU (\d+)\b", path.read_text()):
+        for m in re.finditer(r"DEF (\w+)\s+EQU\s+(\d+)\b", path.read_text()):
             found.setdefault(m[1], int(m[2]))
     missing = [c for c in CONSTANTS if c not in found]
     if missing:

@@ -31,6 +31,48 @@
           <div><dt>game time</dt><dd>{{ gameTime() }}</dd></div>
           <div><dt>running</dt><dd>{{ live()?.minutes ?? 0 | number:'1.0-0' }} min</dd></div>
         </dl>
+
+        @if (game(); as g) {
+          <section class="panel trainer" aria-label="Trainer and party">
+            <h2>TRAINER{{ g.map_name ? ' · ' : '' }}<span>{{ g.map_name }}</span></h2>
+            <dl class="facts">
+              @if (g.trainer; as t) {
+                <div><dt>name</dt><dd>{{ t.name }}</dd></div>
+                <div><dt>rival</dt><dd>{{ t.rival }}</dd></div>
+              }
+              <div><dt>badges</dt><dd class="badge-row" [attr.aria-label]="(g.badges ?? 0) + ' of 8'">{{ badges(g.badges) }}</dd></div>
+              <div><dt>money</dt><dd>₽{{ g.money ?? 0 | number }}</dd></div>
+              @if (g.dex) {
+                <div><dt>pokédex</dt><dd>{{ g.dex.caught ?? 0 }} caught · {{ g.dex.seen ?? 0 }} seen</dd></div>
+              }
+            </dl>
+            <ol class="party">
+              @for (m of party(); track $index) {
+                <li>
+                  <span class="sprite">
+                    @if (m.sprite) { <img [src]="m.sprite" [alt]="m.species" width="56" height="56" loading="lazy" (error)="hideImage($event)"> }
+                  </span>
+                  <div class="mon">
+                    <p class="mon-head">
+                      <span>{{ m.name }}</span>
+                      <span class="lv">Lv {{ m.level }}</span>
+                      @if (m.status) { <span class="status-tag bad">{{ m.status }}</span> }
+                    </p>
+                    <div class="hp" role="meter" aria-label="HP" [attr.aria-valuenow]="m.hp" aria-valuemin="0" [attr.aria-valuemax]="m.max_hp">
+                      <span class="hp-track"><span class="hp-fill" [class]="m.bar.tone" [style.width.%]="m.bar.percent"></span></span>
+                      <span class="hp-text">{{ m.hp }}/{{ m.max_hp }}</span>
+                    </div>
+                    @if (m.moves?.length) {
+                      <details><summary>moves</summary><p class="moves">{{ movesOf(m) }}</p></details>
+                    }
+                  </div>
+                </li>
+              } @empty {
+                <li class="result info">No Pokémon yet.</li>
+              }
+            </ol>
+          </section>
+        }
       </section>
 
       <section class="panel log" aria-label="Log">
@@ -50,6 +92,12 @@
     </div>
 
     <div class="lower">
+      @if (map(); as m) {
+        <section class="panel">
+          <h2>MAP <span>· {{ m.name }}</span></h2>
+          <app-gb-agent-map [map]="m" [pos]="pos()" />
+        </section>
+      }
       <section class="panel">
         <h2>NOTES <span>· its memory across context resets</span></h2>
         @if (notes()?.notes) {
@@ -87,6 +135,11 @@
     <p>
       The game only moves when a script runs, so the screen holds still while the model is
       thinking. Each step is replayed here at game speed, a few seconds behind.
+    </p>
+    <p>
+      The party, trainer and map next to it are read straight out of the game's memory at
+      the end of each step, so they change as the clip on screen does. Sprites are from
+      <a href="https://github.com/PokeAPI/sprites" target="_blank" rel="noopener noreferrer">PokeAPI</a>.
     </p>
   </section>
 </div>

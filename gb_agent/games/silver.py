@@ -63,6 +63,7 @@ SILVER = GameProfile(
         "where it got to rather than count presses."
     ),
     observe=silver_state.observe,
+    map_layout=silver_state.map_layout,
     describe=silver_state.describe,
     read_text=silver_state.text_boxes,
     remember=silver_journal.remember,

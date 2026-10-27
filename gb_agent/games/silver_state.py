@@ -28,6 +28,7 @@ DIRECTIONS = {0: "down", 4: "up", 8: "left", 12: "right"}
 STEP = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
 OBJECT_LENGTH = S["wObject1Struct"] - S["wPlayerStruct"]
 PARTYMON_LENGTH = S["wPartyMon2"] - S["wPartyMon1"]
+DEX_FLAG_BYTES = S["wEndPokedexCaught"] - S["wPokedexCaught"]  # seen is the same size
 MAP_BORDER = 3  # blocks of border around the map in wOverworldMapBlocks
 COORD_OFFSET = 4  # object coordinates are stored plus 4
 WALL, WATER = 0x0F, 0x01
@@ -80,6 +81,22 @@ def _be16(pb: PyBoy, addr: int) -> int:
 
 def _rom(pb: PyBoy, bank: int, addr: int) -> int:
     return pb.memory[bank, addr] if addr >= 0x4000 else pb.memory[addr]
+
+
+def _name(pb: PyBoy, addr: int, length: int) -> str:
+    """A name stored in RAM, up to its "@" terminator."""
+    chars = []
+    for i in range(length):
+        byte = pb.memory[addr + i]
+        if byte == 0x50:
+            break
+        chars.append(CHARMAP.get(byte, "?"))
+    return "".join(chars)
+
+
+def _flags(pb: PyBoy, name: str, size: int) -> int:
+    """How many bits are set in a flag array, such as the Pokedex's caught flags."""
+    return sum(pb.memory[S[name] + i].bit_count() for i in range(size))
 
 
 def map_name(group: int, number: int) -> str:
@@ -385,7 +402,10 @@ def _party(pb: PyBoy) -> list[dict]:
             if move:
                 moves.append({"name": MOVES.get(move, f"move {move}"),
                               "pp": pb.memory[field("wPartyMon1PP") + k] & 0x3F})
+        nickname = S["wPartyMonNicknames"] + i * CONSTANTS["MON_NAME_LENGTH"]
         party.append({"species": SPECIES.get(pb.memory[base], f"species {pb.memory[base]}"),
+                      "dex": pb.memory[base],  # Gen 2's species index is the national number
+                      "nickname": _name(pb, nickname, CONSTANTS["MON_NAME_LENGTH"]),
                       "level": pb.memory[field("wPartyMon1Level")],
                       "hp": _be16(pb, field("wPartyMon1HP")),
                       "max_hp": _be16(pb, field("wPartyMon1MaxHP")),
@@ -443,6 +463,10 @@ def observe(pb: PyBoy) -> dict:
         "bag": _bag(pb),
         "money": int.from_bytes(bytes(pb.memory[S["wMoney"] + i] for i in range(3)), "big"),
         "badges": bin(_u8(pb, "wJohtoBadges")).count("1"),
+        "trainer": {"name": _name(pb, S["wPlayerName"], CONSTANTS["NAME_LENGTH"]),
+                    "rival": _name(pb, S["wRivalName"], CONSTANTS["NAME_LENGTH"])},
+        "dex": {"caught": _flags(pb, "wPokedexCaught", DEX_FLAG_BYTES),
+                "seen": _flags(pb, "wPokedexSeen", DEX_FLAG_BYTES)},
         "naming": naming,
     }
     if battle is None and naming is None:  # the map buffers hold the map only out here
@@ -454,6 +478,24 @@ def observe(pb: PyBoy) -> dict:
                    adjacent=_adjacent(pb, x, y, people, exits, things) if loaded else None,
                    grid=_grid(pb, x, y, people, exits, things) if loaded else None)
     return obs
+
+
+def map_layout(pb: PyBoy) -> dict | None:
+    """The whole current map as grid characters, one string per row, for the live
+    page's mini-map; not shown to the agent. None in a battle or on the naming
+    screen, or while the map buffer doesn't hold the map."""
+    if _u8(pb, "wBattleMode") or _naming(pb):
+        return None
+    group, number = _u8(pb, "wMapGroup"), _u8(pb, "wMapNumber")
+    x, y = _u8(pb, "wPlayerMapX") - COORD_OFFSET, _u8(pb, "wPlayerMapY") - COORD_OFFSET
+    exits, _ = _events(pb)
+    if not _map_loaded(pb, x, y, exits):
+        return None
+    width, height = _u8(pb, "wMapWidth") * 2, _u8(pb, "wMapHeight") * 2
+    rows = ["".join(_tile(_collision(pb, tx, ty))[0] for tx in range(width))
+            for ty in range(height)]
+    return {"group": group, "number": number, "name": map_name(group, number),
+            "width": width, "height": height, "rows": rows, "exits": exits}
 
 
 # -- describing ----------------------------------------------------------------

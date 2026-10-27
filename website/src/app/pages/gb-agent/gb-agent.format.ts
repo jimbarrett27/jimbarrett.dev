@@ -1,4 +1,6 @@
-import { GbAgentActivity } from '../../core/models/gb-agent.interface';
+import {
+  GbAgentActivity, GbAgentClip, GbAgentMon, GbAgentState,
+} from '../../core/models/gb-agent.interface';
 
 /** One model turn in the log: what it said, what it called, what came back. */
 export interface LogTurn {
@@ -107,4 +109,71 @@ export function gameTime(frame: number | undefined, fps = 60): string {
   const s = Math.floor((frame ?? 0) / fps);
   const mmss = `${Math.floor(s / 60) % 60}:${String(s % 60).padStart(2, '0')}`;
   return s >= 3600 ? `${Math.floor(s / 3600)}:${mmss.padStart(5, '0')}` : mmss;
+}
+
+/** Clips with the game state each one ends on: the publisher only lists a state
+ *  where it changed, so carry the last one forward. */
+export function withState(clips: GbAgentClip[]): GbAgentClip[] {
+  let state: GbAgentState | null | undefined;
+  return clips.map(c => {
+    if (c.state !== undefined) {
+      state = c.state;
+      return c;
+    }
+    return state === undefined ? c : { ...c, state };
+  });
+}
+
+/** The Pokémon's Gen 2 sprite, by national Pokédex number. */
+export function spriteUrl(dex: number | undefined): string | null {
+  return dex && dex > 0 && dex <= 251
+    ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-ii/silver/${dex}.png`
+    : null;
+}
+
+/** "PIDGE (Pidgey)", or just "Cyndaquil" when it was never nicknamed. */
+export function monName(m: GbAgentMon): string {
+  const nick = m.nickname?.trim();
+  return !nick || nick.toUpperCase() === m.species.toUpperCase() ? m.species : `${nick} (${m.species})`;
+}
+
+/** HP left as a percentage and a colour, as the game's own bar turns yellow then red. */
+export function hpBar(m: GbAgentMon): { percent: number; tone: 'good' | 'warn' | 'bad' } {
+  const percent = m.max_hp ? Math.max(0, Math.min(100, 100 * (m.hp ?? 0) / m.max_hp)) : 0;
+  return { percent, tone: percent > 50 ? 'good' : percent > 20 ? 'warn' : 'bad' };
+}
+
+export type TileKind = 'floor' | 'wall' | 'water' | 'grass' | 'ledge' | 'off';
+
+/** A horizontal run of tiles of one kind, so a map draws as a few rects, not one per tile. */
+export interface TileRun {
+  x: number;
+  y: number;
+  width: number;
+  kind: TileKind;
+}
+
+function tileKind(c: string): TileKind {
+  switch (c) {
+    case '.': return 'floor';
+    case '#': return 'wall';
+    case '~': return 'water';
+    case 'g': return 'grass';
+    case 'v': case '<': case '>': return 'ledge';
+    default: return 'off';
+  }
+}
+
+export function tileRuns(rows: string[]): TileRun[] {
+  const runs: TileRun[] = [];
+  rows.forEach((row, y) => {
+    for (let x = 0; x < row.length;) {
+      const kind = tileKind(row[x]);
+      let end = x + 1;
+      while (end < row.length && tileKind(row[end]) === kind) end++;
+      runs.push({ x, y, width: end - x, kind });
+      x = end;
+    }
+  });
+  return runs;
 }
