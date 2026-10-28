@@ -159,6 +159,24 @@ export interface GbAgentMap {
   exits?: { x: number; y: number; to?: string }[];
 }
 
+/** One commentary from the oracle (`gb_agent/oracle.py`). */
+export interface GbAgentOracleEntry {
+  /** ISO time it was written. */
+  time: string;
+  /** Plain prose, paragraphs separated by blank lines. */
+  text: string;
+  model?: string;
+  run?: string | null;
+  step?: number | null;
+  /** The window it focuses on. */
+  hours?: number;
+}
+
+/** `oracle.json` at the bucket root — across runs, newest last. */
+export interface GbAgentOracle {
+  entries?: GbAgentOracleEntry[];
+}
+
 /** `runs/<run>/scripts.json` — the run's script library and sub-agent specs. */
 export interface GbAgentScripts {
   version: string;

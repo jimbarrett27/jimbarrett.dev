@@ -4,6 +4,8 @@
     <a href="#about">what is this?</a>
   </header>
 
+  <app-gb-agent-oracle [entries]="oracle()" />
+
   @if (error()) {
     <p class="status">Couldn't reach the bot right now. Please try again later.</p>
   } @else if (!live()) {
@@ -135,6 +137,11 @@
     <p>
       The game only moves when a script runs, so the screen holds still while the model is
       thinking. Each step is replayed here at game speed, a few seconds behind.
+    </p>
+    <p>
+      Twice a day, at 06:00 and 18:00 Stockholm time, the oracle at the top of the page (a
+      separate, larger model, DeepSeek) reads everything the agent has done and writes a
+      short commentary on how it's going, mostly about the last 12 hours.
     </p>
     <p>
       The party, trainer and map next to it are read straight out of the game's memory at

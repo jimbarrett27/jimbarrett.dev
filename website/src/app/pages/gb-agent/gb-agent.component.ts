@@ -6,15 +6,18 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, catchError, exhaustMap, fromEvent, map, merge, of, switchMap, timer } from 'rxjs';
 import { GbAgentService } from '../../core/services/gb-agent.service';
 import {
-  GbAgentClip, GbAgentLive, GbAgentMap, GbAgentMon, GbAgentNotes, GbAgentScripts,
+  GbAgentClip, GbAgentLive, GbAgentMap, GbAgentMon, GbAgentNotes, GbAgentOracleEntry, GbAgentScripts,
 } from '../../core/models/gb-agent.interface';
 import {
   gameTime, hpBar, monName, notesHtml, scriptCall, spriteUrl, toTurns, withState,
 } from './gb-agent.format';
 import { GbAgentMapComponent } from './gb-agent-map.component';
+import { GbAgentOracleComponent } from './gb-agent-oracle.component';
 
 const LIVE_POLL_MS = 4_000;
 const IDLE_POLL_MS = 60_000;
+/** The oracle writes twice a day; this only has to notice within a few minutes. */
+const ORACLE_POLL_MS = 10 * 60_000;
 /** A run whose manifest hasn't been written for this long is shown as offline,
  *  even if the publisher last said it was live (it may have stopped). */
 const STALE_MS = 10 * 60_000;
@@ -30,7 +33,7 @@ const MAX_BEHIND_S = 60;
 @Component({
   selector: 'app-gb-agent',
   standalone: true,
-  imports: [DecimalPipe, GbAgentMapComponent],
+  imports: [DecimalPipe, GbAgentMapComponent, GbAgentOracleComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './gb-agent.component.html',
   styleUrl: './gb-agent.component.css',
@@ -43,6 +46,7 @@ export class GbAgentComponent {
   readonly notes = signal<GbAgentNotes | null>(null);
   readonly scripts = signal<GbAgentScripts | null>(null);
   readonly error = signal(false);
+  readonly oracle = signal<GbAgentOracleEntry[]>([]);
   readonly playing = signal<GbAgentClip | null>(null);
   readonly queue = signal<GbAgentClip[]>([]);
   /** The last clip has finished and its final frame is held: the model is working. */
@@ -104,6 +108,10 @@ export class GbAgentComponent {
 
   constructor() {
     timer(0, 1000).pipe(takeUntilDestroyed()).subscribe(() => this.now.set(Date.now()));
+    timer(0, ORACLE_POLL_MS).pipe(
+      switchMap(() => this.api.getOracle().pipe(catchError(() => EMPTY))),
+      takeUntilDestroyed(),
+    ).subscribe(o => this.oracle.set(o.entries ?? []));
 
     const visible = merge(of(null), fromEvent(document, 'visibilitychange')).pipe(
       map(() => document.visibilityState === 'visible'));
