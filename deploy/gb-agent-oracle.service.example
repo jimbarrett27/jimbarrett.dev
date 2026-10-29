@@ -1,0 +1,19 @@
+# systemd USER unit for the oracle's commentary on the Pokemon agent
+# (gb_agent/oracle.py), started by gb-agent-oracle.timer. Install both:
+#   cp deploy/gb-agent-oracle.service.example ~/.config/systemd/user/gb-agent-oracle.service
+#   cp deploy/gb-agent-oracle.timer.example ~/.config/systemd/user/gb-agent-oracle.timer
+#   systemctl --user daemon-reload && systemctl --user enable --now gb-agent-oracle.timer
+# Run it now: systemctl --user start gb-agent-oracle
+
+[Unit]
+Description=gb_agent oracle: a commentary on the series so far
+RequiresMountsFor=/mnt/storage
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/jim/deploy/jimbarrett.dev
+Environment=GB_AGENT_DIR=/mnt/storage/data/gb_agent
+Environment=JIMBARRETT_DATA_DIR=/home/jim/data
+ExecStart=/home/jim/.local/bin/uv run python -m gb_agent.oracle
+SyslogIdentifier=gb-agent-oracle

@@ -35,6 +35,7 @@ by a reboot rather than by any decision to deploy it.
 3. Syncs `dist/triage/browser/` into `/home/jim/data/triage-web`. It syncs in
    place rather than replacing the directory, because Caddy bind-mounts it.
 4. Restarts `telegram-bot` and `triage-backend`. This asks for your sudo password.
+   It also restarts the `gb-agent` user unit, if it's installed (no sudo; see below).
 
 Then check it came up, and confirm which commit is live:
 
@@ -58,7 +59,8 @@ rather than failing, so the bot would come up healthy with no history.
 
 ## Scheduled jobs
 
-There are no cron jobs or systemd timers. Everything periodic is a
+Apart from the gb_agent oracle timer (below), there are no cron jobs or systemd
+timers. Everything periodic is a
 `job_queue.run_daily(...)` or `run_repeating(...)` registered in `main.py`, inside
 the bot process. So
 "did the job run?" is answered with `journalctl -u telegram-bot`, and a job that
@@ -123,3 +125,36 @@ can go live first. To add one:
 
 The job pushes every 15 minutes from the bot process, like the other panels. Check
 by hand with `uv run python -m chess_panel.trmnl --dry-run`.
+
+## The Pokemon agent (gb_agent)
+
+The agent plays around the clock under two **user** units. They're user units
+because the model server it plays against, `llama-server`, is one, and they need no
+sudo. Lingering is on, so they start at boot. Like the bot, they run from the
+deploy clone.
+
+| Unit | What it does |
+|---|---|
+| `gb-agent.service` | `python -m gb_agent.autoplay`: plays the series in `$GB_AGENT_DIR/autoplay.json`, resuming from the last kept step on every start |
+| `gb-agent-oracle.timer` → `.service` | At 06:00 and 18:00 Stockholm time, `python -m gb_agent.oracle` writes a DeepSeek commentary to the bucket's `oracle.json` for the page |
+
+Install from the `.example` files here into `~/.config/systemd/user/`, then:
+
+```sh
+systemctl --user daemon-reload
+systemctl --user enable --now gb-agent gb-agent-oracle.timer
+```
+
+`autoplay.json` (in `/mnt/storage/data/gb_agent`) is the switch:
+`{"model": "qwen3.6-35b-a3b-local", "start": null}`. A null `start` begins a new
+game from the bedroom, and the first run's id is written back. Without the file,
+the unit exits and stays stopped. To start over, set `start` back to null and
+restart.
+
+```sh
+systemctl --user status gb-agent
+journalctl --user -u gb-agent -n 50 --no-pager      # starts, resumes, stops
+ls -t /mnt/storage/data/gb_agent/runs/live-*.out | head -1   # the run's own output
+systemctl --user list-timers gb-agent-oracle.timer
+systemctl --user start gb-agent-oracle               # a commentary now
+```

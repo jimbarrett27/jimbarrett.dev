@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
-  GbAgentCurrent, GbAgentLive, GbAgentMap, GbAgentNotes, GbAgentScripts,
+  GbAgentCurrent, GbAgentLive, GbAgentMap, GbAgentNotes, GbAgentOracle, GbAgentScripts,
 } from '../models/gb-agent.interface';
 
 /**
@@ -37,6 +37,11 @@ export class GbAgentService {
   /** Fetched only when `live.json`'s `scripts_version` changes. */
   getScripts(run: string): Observable<GbAgentScripts> {
     return this.http.get<GbAgentScripts>(`${this.base}/runs/${run}/scripts.json`);
+  }
+
+  /** The oracle's commentaries, written twice a day. */
+  getOracle(): Observable<GbAgentOracle> {
+    return this.http.get<GbAgentOracle>(`${this.base}/oracle.json`);
   }
 
   /** A map's layout, by the `map` key of a clip's `pos`; fetched once per map. */

@@ -1,0 +1,42 @@
+# systemd USER unit that keeps the Pokemon agent playing (gb_agent/autoplay.py).
+# A user unit, like llama-server.service which it plays against: no sudo, and with
+# lingering on it starts at boot. Install, then enable:
+#   cp deploy/gb-agent.service.example ~/.config/systemd/user/gb-agent.service
+#   systemctl --user daemon-reload && systemctl --user enable --now gb-agent
+#
+# What it plays is $GB_AGENT_DIR/autoplay.json; without that file it does nothing
+# (and exits 3, which stops the restarts). Every start resumes the series from its
+# last kept step, so a restart, a deploy or a reboot loses at most one step.
+# Runs from the DEPLOY clone (see telegram-bot.service.example for why).
+
+[Unit]
+Description=gb_agent: the language model playing Pokemon, around the clock
+After=llama-server.service
+Wants=llama-server.service
+# ROMs, runs and save states are on the 4 TB disk, which is mounted nofail
+RequiresMountsFor=/mnt/storage
+
+[Service]
+Type=exec
+WorkingDirectory=/home/jim/deploy/jimbarrett.dev
+Environment=GB_AGENT_DIR=/mnt/storage/data/gb_agent
+Environment=JIMBARRETT_DATA_DIR=/home/jim/data
+ExecStart=/home/jim/.local/bin/uv run python -m gb_agent.autoplay
+
+# Stopping: SIGINT to autoplay only, which passes it to the run, which finishes it
+# (writes its end, and its publisher sends that to the page). Whatever is left
+# after the timeout is killed.
+KillMode=mixed
+KillSignal=SIGINT
+TimeoutStopSec=180
+
+Restart=always
+RestartSec=60
+RestartPreventExitStatus=3
+OOMPolicy=continue
+SyslogIdentifier=gb-agent
+# the game and the agent are light next to the model; let llama-server have the CPU
+CPUWeight=50
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,12 @@
+# Twice a day, Stockholm time. Persistent: a time missed while the server was off
+# runs once when it comes back. See gb-agent-oracle.service.example to install.
+
+[Unit]
+Description=gb_agent oracle at 06:00 and 18:00 Stockholm time
+
+[Timer]
+OnCalendar=*-*-* 06,18:00:00 Europe/Stockholm
+Persistent=true
+
+[Install]
+WantedBy=timers.target
