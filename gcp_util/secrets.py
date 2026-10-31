@@ -166,6 +166,16 @@ def get_trmnl_fitness_webhook_url() -> str:
 
 
 @lru_cache(maxsize=1)
+def get_trmnl_power_webhook_url() -> str:
+    """Webhook for the cycling power-curve TRMNL private plugin.
+
+    The UUID in the URL is the only credential TRMNL checks, so treat the whole
+    URL as a secret rather than a config value.
+    """
+    return _bot_key("TRMNL_POWER_WEBHOOK_URL")
+
+
+@lru_cache(maxsize=1)
 def get_trmnl_swedish_webhook_url() -> str:
     """Webhook for the Swedish word-of-the-day TRMNL private plugin.
 

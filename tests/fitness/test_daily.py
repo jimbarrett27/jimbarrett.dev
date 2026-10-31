@@ -42,3 +42,12 @@ def test_sustained_outage_alerts_once_then_recovers(context, monkeypatch):
     assert len(messages) == 2
     assert "failed" in messages[0]
     assert "updating again" in messages[1]
+
+
+def test_power_panel_alerts_on_its_own_count(context, monkeypatch):
+    monkeypatch.setattr(daily, "refresh_power_panel", lambda: False)
+    for _ in range(daily.POWER_ALERT_AFTER_FAILURES):
+        asyncio.run(daily.power_panel_task(context))
+    messages = [c.args[0] for c in context.bot_data["minecraft_bot"].send_message_to_me.call_args_list]
+    assert len(messages) == 1 and "power panel" in messages[0]
+    assert context.bot_data.get(daily.FAILURES_KEY, 0) == 0

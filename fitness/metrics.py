@@ -16,6 +16,7 @@ the panel ever disagrees with the website by a point or two, this is why.
 """
 
 import logging
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from math import ceil, floor, log10
@@ -45,6 +46,32 @@ FORM_BANDS = [
     (-30.0, "Building"),
     (float("-inf"), "Overloaded"),
 ]
+
+
+# intervals.icu activity types, grouped into the families the week box splits
+# by. Zwift arrives as VirtualRide. Anything unlisted (walks, strength, ...)
+# still counts towards the week's load, hours and sessions, just not either
+# sport's column -- adding ride km to run km is the nonsense this split exists
+# to stop.
+SPORT_FAMILIES = {
+    "Run": "run",
+    "TrailRun": "run",
+    "VirtualRun": "run",
+    "Ride": "ride",
+    "VirtualRide": "ride",
+    "GravelRide": "ride",
+    "MountainBikeRide": "ride",
+    "EBikeRide": "ride",
+}
+
+
+def _sport(activity: dict) -> str:
+    return SPORT_FAMILIES.get(activity.get("type") or "", "other")
+
+
+def _activity_label(type_: str) -> str:
+    """``"VirtualRide"`` -> ``"Virtual Ride"``, for the panel's last-activity line."""
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", type_)
 
 
 def _form_label(form: float) -> str:
@@ -97,13 +124,28 @@ def _day_of(activity: dict) -> date:
 
 
 @dataclass
+class SportSummary:
+    """One sport's share of a week. Distance in km, duration in hours."""
+
+    km: float = 0.0
+    hours: float = 0.0
+    sessions: int = 0
+
+
+@dataclass
 class WeekSummary:
-    """One rolling 7-day block. Distances in km, durations in hours."""
+    """One rolling 7-day block.
+
+    Load, hours and sessions are totals across every sport -- they are
+    sport-neutral, and fatigue is one body's. Distance only means anything per
+    sport, so there is deliberately no total km.
+    """
 
     load: int = 0
     hours: float = 0.0
-    km: float = 0.0
     sessions: int = 0
+    run: SportSummary = field(default_factory=SportSummary)
+    ride: SportSummary = field(default_factory=SportSummary)
 
 
 @dataclass
@@ -152,14 +194,28 @@ class PanelMetrics:
         return asdict(self)
 
 
+def _hours(activities: list[dict]) -> float:
+    return round(sum(a.get("moving_time") or 0 for a in activities) / 3600, 1)
+
+
+def _sport_summary(activities: list[dict], sport: str) -> SportSummary:
+    mine = [a for a in activities if _sport(a) == sport]
+    return SportSummary(
+        km=round(sum(a.get("distance") or 0 for a in mine) / 1000, 1),
+        hours=_hours(mine),
+        sessions=len(mine),
+    )
+
+
 def _summarise(activities: list[dict], start: date, end: date) -> WeekSummary:
     """Aggregate activities with ``start <= day < end``."""
     window = [a for a in activities if start <= _day_of(a) < end]
     return WeekSummary(
         load=sum(int(a.get("icu_training_load") or 0) for a in window),
-        hours=round(sum(a.get("moving_time") or 0 for a in window) / 3600, 1),
-        km=round(sum(a.get("distance") or 0 for a in window) / 1000, 1),
+        hours=_hours(window),
         sessions=len(window),
+        run=_sport_summary(window, "run"),
+        ride=_sport_summary(window, "ride"),
     )
 
 
@@ -241,7 +297,7 @@ def build(wellness: list[dict], activities: list[dict], today: date) -> PanelMet
         this_week=this_week,
         last_week=last_week,
         daily_load=daily_load,
-        last_activity=(last.get("type") or "") if last else "",
+        last_activity=_activity_label(last.get("type") or "") if last else "",
         last_activity_ago=(today - _day_of(last)).days if last else 0,
         resting_hr=int(latest["restingHR"]) if latest.get("restingHR") else None,
         hrv=round(float(latest["hrv"]), 1) if latest.get("hrv") else None,
