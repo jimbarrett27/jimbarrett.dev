@@ -76,3 +76,16 @@ def fetch_activities(days: int = 28, today: date | None = None) -> list[dict]:
     rows.sort(key=lambda row: row["start_date_local"])
     logger.info("fetched %d activities", len(rows))
     return rows
+
+
+def fetch_power_curves(curves: str = "42d,all") -> list[dict]:
+    """Best-effort power curves for cycling, one dict per window in ``curves``.
+
+    ``type=Ride`` covers virtual rides too, so Zwift sessions count. Each curve
+    carries parallel ``secs`` and ``watts`` lists, sparse at long durations (60s
+    steps beyond half an hour or so) and ending at the longest ride in the
+    window -- a short window can stop well before an hour.
+    """
+    response = _get("power-curves", {"type": "Ride", "curves": curves})
+    logger.info("fetched %d power curves", len(response["list"]))
+    return response["list"]

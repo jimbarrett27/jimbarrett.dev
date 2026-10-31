@@ -101,14 +101,27 @@
             <span>THIS WEEK</span>
             <span>{{ form_label | upcase }}</span>
           </div>
-          <div style="padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;">
-            <div style="display: flex; justify-content: space-between; align-items: baseline;">
-              <span style="font-family: 'Barlow Condensed', 'IBM Plex Mono', sans-serif; font-weight: 800; font-size: 34px; line-height: 1;">{{ this_week.km }}<span style="font-size: 16px; font-weight: 600; margin-left: 3px;">KM</span></span>
-              <span style="font-family: 'Barlow Condensed', 'IBM Plex Mono', sans-serif; font-weight: 800; font-size: 34px; line-height: 1;">{{ this_week.hours }}<span style="font-size: 16px; font-weight: 600; margin-left: 3px;">H</span></span>
-              <span style="font-family: 'Barlow Condensed', 'IBM Plex Mono', sans-serif; font-weight: 800; font-size: 34px; line-height: 1;">{{ this_week.load }}<span style="font-size: 16px; font-weight: 600; margin-left: 3px;">LOAD</span></span>
+          <div style="padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 8px;">
+            {% comment %}
+              Distance is per sport only: run km plus ride km is a meaningless
+              total. Load and hours are sport-neutral, so they stay combined.
+            {% endcomment %}
+            <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 2px;">RUN &middot; {{ this_week.run.hours }}H</span>
+                <span style="font-family: 'Barlow Condensed', 'IBM Plex Mono', sans-serif; font-weight: 800; font-size: 34px; line-height: 1;">{{ this_week.run.km }}<span style="font-size: 16px; font-weight: 600; margin-left: 3px;">KM</span></span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 2px;">RIDE &middot; {{ this_week.ride.hours }}H</span>
+                <span style="font-family: 'Barlow Condensed', 'IBM Plex Mono', sans-serif; font-weight: 800; font-size: 34px; line-height: 1;">{{ this_week.ride.km }}<span style="font-size: 16px; font-weight: 600; margin-left: 3px;">KM</span></span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 2px; align-items: flex-end;">
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 2px;">TOTAL &middot; {{ this_week.hours }}H</span>
+                <span style="font-family: 'Barlow Condensed', 'IBM Plex Mono', sans-serif; font-weight: 800; font-size: 34px; line-height: 1;">{{ this_week.load }}<span style="font-size: 16px; font-weight: 600; margin-left: 3px;">LOAD</span></span>
+              </div>
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 11px; letter-spacing: 1px; border-top: 2px solid #000000; padding-top: 6px;">
-              <span>{{ this_week.sessions }} SESSIONS &middot; LAST WEEK {{ last_week.km }} KM</span>
+              <span>{{ this_week.sessions }} SESSIONS &middot; LAST WK {{ last_week.run.km }} RUN / {{ last_week.ride.km }} RIDE KM</span>
               <span>{% if last_activity != "" %}{{ last_activity | upcase }} &middot; {{ last_activity_ago }}D AGO{% else %}NO RECENT ACTIVITY{% endif %}</span>
             </div>
           </div>

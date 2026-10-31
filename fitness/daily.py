@@ -11,6 +11,10 @@ Pushing is not the same as displaying: TRMNL holds the data and the device picks
 it up on its own refresh, so the panel updates at the device's cadence, not this
 job's. Pushing more often than that just means the device always finds fresh data.
 
+The power panel rides along on the same module with its own, slower job: its
+curve only moves when a ride lands, so hourly is plenty, and it keeps its own
+failure count so one plugin's outage never masks or fakes the other's.
+
 A missed push costs nothing permanent -- the panel shows older numbers until the
 next one -- and the next scheduled run is itself the retry. So a failure is only
 reported once it has persisted for ``ALERT_AFTER_FAILURES`` runs in a row, once,
@@ -24,6 +28,7 @@ from telegram.ext import ContextTypes
 
 from fitness import trmnl
 from fitness.metrics import collect
+from fitness.power import collect as collect_power
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +37,20 @@ REFRESH_INTERVAL_SECONDS = 30 * 60
 ALERT_AFTER_FAILURES = 4
 FAILURES_KEY = "fitness_panel_consecutive_failures"
 
+POWER_REFRESH_INTERVAL_SECONDS = 60 * 60
+# Two consecutive failures at an hourly interval: about two hours stale.
+POWER_ALERT_AFTER_FAILURES = 2
+POWER_FAILURES_KEY = "power_panel_consecutive_failures"
+
 
 def refresh_panel() -> bool:
     """Fetch the latest metrics and push them. Blocking; call off the event loop."""
     return trmnl.push(collect())
+
+
+def refresh_power_panel() -> bool:
+    """Fetch the power curves and push them. Blocking; call off the event loop."""
+    return trmnl.push_power(collect_power())
 
 
 async def fitness_panel_task(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -63,3 +78,24 @@ async def fitness_panel_task(context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("TRMNL fitness panel refreshed")
     if failures >= ALERT_AFTER_FAILURES:
         notify("📈 TRMNL fitness panel is updating again")
+
+
+async def power_panel_task(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Scheduler hook: refresh the TRMNL power panel, alerting as the fitness one does."""
+    failures = context.bot_data.get(POWER_FAILURES_KEY, 0)
+    notify = context.bot_data["minecraft_bot"].send_message_to_me
+    try:
+        if not await asyncio.to_thread(refresh_power_panel):
+            raise RuntimeError("TRMNL rejected the push")
+    except Exception:
+        failures += 1
+        context.bot_data[POWER_FAILURES_KEY] = failures
+        logger.exception("Failed to refresh TRMNL power panel (%d in a row)", failures)
+        if failures == POWER_ALERT_AFTER_FAILURES:
+            notify(f"🚴 TRMNL power panel has failed {failures} times in a row — panel is stale")
+        return
+
+    context.bot_data[POWER_FAILURES_KEY] = 0
+    logger.info("TRMNL power panel refreshed")
+    if failures >= POWER_ALERT_AFTER_FAILURES:
+        notify("🚴 TRMNL power panel is updating again")

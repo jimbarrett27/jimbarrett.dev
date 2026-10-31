@@ -26,6 +26,7 @@ from minecraft.healthcheck import run_healthcheck, run_on_demand_check, run_dail
 from content_screening.scanner import run_full_scan
 from tapestry.daily import daily_tapestry_task
 from fitness.daily import REFRESH_INTERVAL_SECONDS, fitness_panel_task
+from fitness import daily as fitness_panels
 from swedish import daily as swedish_panel
 from chess_panel import daily as chess_panel
 from hn_favourites import sync as hn_favourites
@@ -236,6 +237,12 @@ def build_minecraft_app() -> Application:
         # always finds current data, whenever the watch happens to sync.
         app.job_queue.run_repeating(
             fitness_panel_task, interval=REFRESH_INTERVAL_SECONDS, first=30
+        )
+        # TRMNL power-curve panel → hourly; the curve only moves when a ride lands.
+        app.job_queue.run_repeating(
+            fitness_panels.power_panel_task,
+            interval=fitness_panels.POWER_REFRESH_INTERVAL_SECONDS,
+            first=120,
         )
         # TRMNL Swedish word panel → hourly, on the hour, cycling through the
         # day's words; the first run of a day generates them. Also once on

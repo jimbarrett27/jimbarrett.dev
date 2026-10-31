@@ -1,6 +1,7 @@
-"""Render the fitness panel locally. See :mod:`util.panel_preview`.
+"""Render the fitness or power panel locally. See :mod:`util.panel_preview`.
 
     uv run --extra dev python -m fitness.preview
+    uv run --extra dev python -m fitness.preview --panel power
 """
 
 import argparse
@@ -10,23 +11,28 @@ from pathlib import Path
 
 from util import panel_preview, trmnl
 
-TEMPLATE = Path(__file__).parent / "templates" / "fitness_full.liquid"
+TEMPLATES = Path(__file__).parent / "templates"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, default=Path("panel-preview/fitness"))
+    parser.add_argument("--panel", choices=("fitness", "power"), default="fitness")
+    parser.add_argument("--out", type=Path, help="default: panel-preview/<panel>")
     parser.add_argument("--json", type=Path, help="also write the webhook payload here")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    from fitness.metrics import collect
+    if args.panel == "power":
+        from fitness.power import collect
+    else:
+        from fitness.metrics import collect
 
     merge_variables = collect().as_merge_variables()
     payload = trmnl.build_payload(merge_variables)
     if args.json:
         args.json.write_text(payload)
-    panel_preview.preview(TEMPLATE, merge_variables, args.out)
+    panel_preview.preview(TEMPLATES / f"{args.panel}_full.liquid", merge_variables,
+                          args.out or Path("panel-preview") / args.panel)
     return 0
 
 

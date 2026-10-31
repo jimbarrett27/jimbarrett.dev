@@ -128,3 +128,25 @@ def test_missing_optional_fields_do_not_blow_up():
 def test_empty_wellness_is_an_error():
     with pytest.raises(ValueError):
         build([], [], TODAY)
+
+
+def test_week_splits_distance_by_sport():
+    acts = [
+        activity("2026-09-15", 50, metres=10000.0, seconds=3600),
+        activity("2026-09-16", 40, type_="VirtualRide", metres=30000.0, seconds=3600),
+        activity("2026-09-16", 20, type_="Ride", metres=20000.0, seconds=1800),
+        activity("2026-09-17", 5, type_="Walk", metres=3000.0, seconds=1800),
+    ]
+    week = build([wellness_day("2026-09-17", 20.0, 15.0)], acts, TODAY).this_week
+    assert (week.run.km, week.run.hours, week.run.sessions) == (10.0, 1.0, 1)
+    assert (week.ride.km, week.ride.hours, week.ride.sessions) == (50.0, 1.5, 2)
+    # The walk sits in neither sport but still counts towards the totals.
+    assert (week.load, week.hours, week.sessions) == (115, 3.0, 4)
+    assert not hasattr(week, "km")
+
+
+def test_last_activity_is_readable():
+    acts = [activity("2026-09-16", 40, type_="VirtualRide")]
+    metrics = build([wellness_day("2026-09-17", 20.0, 15.0)], acts, TODAY)
+    assert metrics.last_activity == "Virtual Ride"
+    assert metrics.last_activity_ago == 1
