@@ -191,6 +191,18 @@ still navigates on its own (no provided `walk_to`); `--no-state-report` gives th
 old screenshots-only behaviour for comparison. Design doc: "gb_agent state harness:
 design" (claude.ai artifact).
 
+**A guide (started 2026-11-02).** After 85 hours with no badge, and twelve of them
+spent looking for a path on Route 46 that doesn't exist, the agent gets a walkthrough.
+A GameFAQs guide (YoyoYoshi's Gold/Silver walkthrough) is boiled down by hand into
+ordered objectives in `$GB_AGENT_DIR/guide/silver.json`, each with the story flags
+that are set once it's done (`gb_agent/guide.py`; flags read by
+`games/silver_flags.py` from pokegold's `wEventFlags` and engine-flag table). The
+harness always knows the current objective; the agent never sees the flags. The
+guide and the objectives stay out of the repo and off the bucket: the guide's
+copyright forbids republishing. Covered so far: up to the first badge. Still to come:
+showing the current objective in each report, a `guide` lookup tool, a check when the
+agent looks stuck, and a `--no-guide` switch.
+
 **Game-agnostic helpers are fine (decided 2026-10-21).** Small local models couldn't
 tell whether an action did anything (Silver's first tap in a new direction only turns
 the player: 0.5% of pixels). So every report says how much of the screen changed, in

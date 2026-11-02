@@ -49,6 +49,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--no-state-report", action="store_true",
                    help="don't describe the game state in reports: screenshots only, as "
                         "before 2026-10-25")
+    p.add_argument("--no-guide", action="store_true",
+                   help="don't tell the agent the guide's current objective when its "
+                        "context is cleared")
     return p.parse_args(argv)
 
 
@@ -68,6 +71,7 @@ def main(argv=None) -> int:
         notify=not args.no_notify,
         allow_paid=args.allow_paid,
         state_report=not args.no_state_report,
+        guide=not args.no_guide,
     )
     resume = None
     if args.resume:
