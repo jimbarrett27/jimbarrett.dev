@@ -8,7 +8,9 @@ Written directly on LangChain's chat-model interface rather than with
   the front forces the whole prompt to be re-read (minutes at 16k on this CPU).
 - **Compaction.** Near the context limit the model writes notes for itself, and
   the context restarts from the system prompt, the goal, those notes and the
-  current screen. Its scripts survive regardless; they're in the library.
+  current screen. Its scripts survive regardless; they're in the library. If the
+  game has a guide, its current objective goes into the rewrite request and the
+  restart, so the notes' GOAL is set against it.
 - **Screenshots** come after the tool results as a user message (tool messages
   can't carry images everywhere), and only for the latest step.
 """
@@ -124,9 +126,16 @@ you'll be shown it fresh, along with the places you've been and what you've been
 told, which the game keeps track of. Where those and your notes disagree, the game \
 is right: fix your notes. At most 2000 characters. Reply with the notes only, as \
 plain text: no tool call.
-
+{{guide}}
 Your current notes:
 {{notes}}"""
+
+GUIDE = """
+A guide to the game (a walkthrough) says what to do now and next:
+{objectives}
+Make your GOAL match it: where your notes and the guide disagree about what to do \
+next, the guide is right.
+"""
 
 NOTES_CHECK = """\
 Notes check: before carrying on, call update_notes with your notes brought up to \
@@ -232,6 +241,9 @@ class GameAgent:
             text += f"\n\nYour notes (kept across context clears):\n{self.run.notes}"
         if journal := self.run.journal_text():
             text += f"\n\n{journal}"
+        if objectives := self.run.guide_text():
+            text += ("\n\nA guide to the game (a walkthrough) says what to do now and "
+                     f"next:\n{objectives}")
         text += self._state_now()
         return [self.system, self._with_screens(text, [
             (f"the screen now (frame {self.run.frame})", self.run.screenshot_png())])]
@@ -361,8 +373,10 @@ class GameAgent:
     def _compact(self) -> None:
         """Clear the context; the model's rewritten notes are what carries over."""
         # Appended to the existing context, so only the request itself is new input.
+        objectives = self.run.guide_text() if self.task is None else ""
         request = self.messages + [HumanMessage(COMPACT_PROMPT.format(
-            notes=self.run.notes or "(none yet)"))]
+            notes=self.run.notes or "(none yet)",
+            guide=GUIDE.format(objectives=objectives) if objectives else ""))]
         try:
             reply = content_to_str(self._invoke(self.notes_llm, request,
                                                 purpose="compact").content)

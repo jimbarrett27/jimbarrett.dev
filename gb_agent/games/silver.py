@@ -22,9 +22,10 @@ to the agent after each step (see ``silver_gen`` for where the addresses come fr
 
 from pathlib import Path
 
+from gb_agent.guide import guide_path
 from gb_agent.paths import gb_agent_path
 
-from gb_agent.games import silver_journal, silver_state
+from gb_agent.games import silver_flags, silver_journal, silver_state
 from gb_agent.games.profile import GameProfile, MemRef
 
 _A = "a:4:100"
@@ -69,4 +70,6 @@ SILVER = GameProfile(
     remember=silver_journal.remember,
     recall=silver_journal.recall,
     state_help=silver_state.STATE_HELP,
+    guide=guide_path("silver"),
+    flag=silver_flags.flag,
 )

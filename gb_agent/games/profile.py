@@ -72,6 +72,10 @@ class GameProfile:
     # map_layout(pyboy) -> the whole current map for the live page's mini-map, or None
     # when it can't be read; the publisher calls it, the agent never sees it.
     map_layout: Callable[[PyBoy], dict | None] | None = None
+    # The guide (gb_agent.guide): an objectives file, and flag(pyboy, name) -> whether
+    # one of the story flags its objectives name is set. Read by the harness only.
+    guide: Path | None = None
+    flag: Callable[[PyBoy, str], bool] | None = None
 
     def rom_bytes(self) -> bytes:
         if not self.rom.exists():

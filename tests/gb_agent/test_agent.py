@@ -464,3 +464,36 @@ def test_the_games_journal_is_shown_after_a_clear_and_comes_back_on_resume(
     second = Run(first.config, root=tmp_path / "runs", game=keeping, image=image, notify=None,
                  resume=ResumePoint.find(first.dir, 2))
     assert second.journal == {"steps": [1, 1]}
+
+
+def _with_guide(game, tmp_path):
+    path = tmp_path / "guide.json"
+    path.write_text(json.dumps([
+        {"id": id_, "where": "the house", "do": f"do {id_}", "done_when": [f"F_{id_}"]}
+        for id_ in ("a", "b", "c")]))
+    return replace(game, guide=path, flag=lambda pyboy, name: name == "F_a")
+
+
+def test_compaction_is_told_the_guides_current_objective(make_run, game, tmp_path):
+    run = make_run()
+    run.game = _with_guide(game, tmp_path)
+    run.objectives = run._load_guide()
+    run._after_kept()
+    small = replace(get_profile("qwen3-vl-2b-local"), context_window=1_000)
+    reason, model, agent = play(run, [
+        say(call("update_notes", notes="GOAL: find the stairs."), input_tokens=900),
+        say(text="GOAL: do b."),
+        say(call("wait", frames=10)),
+    ], profile=small)
+    request = model.seen[1][-1].content
+    assert "A guide to the game" in request
+    assert "Now (the house): do b\nThen (the house): do c" in request
+    opening = model.seen[2][1].content[0]["text"]
+    assert "Now (the house): do b" in opening
+    assert jsonl(run, "progress.jsonl")[-1]["guide"] == "b"
+
+
+def test_no_guide_without_the_switch(make_run, game, tmp_path):
+    run = make_run(guide=False)
+    run.game = _with_guide(game, tmp_path)
+    assert run._load_guide() is None and run.guide_text() == ""

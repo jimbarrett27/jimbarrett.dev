@@ -37,6 +37,7 @@ from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
+from gb_agent import guide
 from gb_agent.blockers import BlockerReporter, telegram
 from gb_agent.emulator import boot, save_state
 from gb_agent.games import GAMES, GameProfile
@@ -70,6 +71,9 @@ class ExperimentConfig:
     allow_paid: bool = False  # may sub-agents use paid (OpenRouter) models?
     # Describe the game state at the top of every report, if the game profile can.
     state_report: bool = True
+    # Tell the agent the guide's current objective when its context is cleared, if the
+    # game profile has a guide (gb_agent.guide).
+    guide: bool = True
 
 
 def new_run_id(config: ExperimentConfig) -> str:
@@ -219,6 +223,8 @@ class Run:
         self.started_at = datetime.now(timezone.utc).isoformat()
         self.stop_reason: str | None = None
         self.observation: dict | None = None  # the game state after the last kept step
+        self.objectives = self._load_guide()
+        self.objective: int | None = None  # the current one, as of the last kept step
         self._after_kept()
         self.save_manifest()
 
@@ -336,6 +342,21 @@ class Run:
     def _read_text(self):
         return self.game.read_text if self.config.state_report else None
 
+    def _load_guide(self) -> list[guide.Objective] | None:
+        g = self.game
+        if not self.config.guide or g.guide is None or g.flag is None:
+            return None
+        if not g.guide.exists():
+            logger.warning("no guide for %s at %s; playing without one", g.name, g.guide)
+            return None
+        return guide.load(g.guide)
+
+    def guide_text(self) -> str:
+        """The guide's current objective and the next, as shown to the agent, or ""."""
+        if self.objectives is None:
+            return ""
+        return guide.show(self.objectives, self.objective)
+
     def journal_text(self) -> str:
         """The harness's journal as shown to the agent, or ""."""
         if self.game.recall is None or not self.reports_state:
@@ -379,7 +400,7 @@ class Run:
     def _after_kept(self) -> None:
         """Read the new state once: progress values for scoring, and the game state
         the agent is told about. A failed observation costs the report, not the run."""
-        if not self.game.progress_values and not self.reports_state:
+        if not self.game.progress_values and not self.reports_state and self.objectives is None:
             return
         pyboy = boot(self.rom, self.state)
         try:
@@ -395,11 +416,17 @@ class Run:
                 except Exception:
                     logger.exception("step %d: couldn't read the game state", self.step)
                     self.observation = None
+            if self.objectives is not None:
+                self.objective = guide.current(self.objectives,
+                                               lambda name: self.game.flag(pyboy, name))
         finally:
             pyboy.stop(save=False)
-        if values:
-            _jsonl(self.dir / "progress.jsonl", {"step": self.step, "frame": self.frame,
-                                                 "values": values})
+        if values or self.objectives is not None:
+            record = {"step": self.step, "frame": self.frame, "values": values}
+            if self.objectives is not None:
+                record["guide"] = (self.objectives[self.objective].id
+                                   if self.objective is not None else None)
+            _jsonl(self.dir / "progress.jsonl", record)
 
     def set_notes(self, notes: str, agent: str) -> None:
         self.notes = notes
