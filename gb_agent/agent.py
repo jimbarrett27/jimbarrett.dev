@@ -46,6 +46,12 @@ you're expected to play:
 - If you've done the same thing by hand twice, turn it into a script.
 - If a script doesn't do what you expected, read its report, fix it with \
 write_script, and run it again. Every run counts: there's no undo.
+- Keep the library small and general. A script should take arguments (a direction, \
+a number of tiles, a target) so one script covers many trips: don't write a script \
+for a single journey or a single conversation, call a general one with arguments.
+- Before writing a script, check whether one you have already does the job. To \
+improve a script, rewrite it under the same name; don't add a copy like name_v2 or \
+name_from_here. Every old version is kept, so nothing is lost.
 Pressing buttons directly is fine for a quick look, but don't play that way for long."""
 
 SUB_INTRO = """\
