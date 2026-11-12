@@ -31,14 +31,14 @@ class SavedNote:
 
 
 def render_note(*, when: datetime, model: str, image_names: list[str],
-                caption: str | None, transcript: str) -> str:
+                caption: str | None, transcript: str, origin: str = "telegram") -> str:
     heading = f"# {caption}\n\n" if caption else ""
     embeds = "\n".join(f"![[{name}]]" for name in image_names)
     return (
         "---\n"
         f"created: {when.isoformat(timespec='seconds')}\n"
         f"pages: {len(image_names)}\n"
-        "source: telegram\n"
+        f"source: {origin}\n"
         f"model: {model}\n"
         "tags:\n"
         "  - handwritten-note\n"
@@ -55,11 +55,12 @@ def render_note(*, when: datetime, model: str, image_names: list[str],
 
 def save_note(*, when: datetime, pages: list[tuple[bytes, str]], model: str,
               caption: str | None, transcript: str,
-              figures: Sequence[bytes] = ()) -> SavedNote:
+              figures: Sequence[bytes] = (), origin: str = "telegram") -> SavedNote:
     """Write the page images, redrawn figures and the note; images first, so no embed ever dangles.
 
     ``pages`` are ``(bytes, extension)`` pairs in page order. ``figures`` are SVGs,
     standing in for the transcript's ``{{figure-N}}`` placeholders in order.
+    ``origin`` is where the pages came from, for the note's ``source:`` field.
     """
     stem = free_stem(notes_dir(), when)
     note_path = notes_dir() / f"{stem}.md"
@@ -73,7 +74,7 @@ def save_note(*, when: datetime, pages: list[tuple[bytes, str]], model: str,
         write_atomic(path, data)
     write_atomic(note_path, render_note(
         when=when, model=model, image_names=[p.name for p in image_paths],
-        caption=caption, transcript=transcript,
+        caption=caption, transcript=transcript, origin=origin,
     ).encode("utf-8"))
 
     logger.info(f"Saved handwritten note {note_path.name} ({len(pages)} page(s))")
