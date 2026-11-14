@@ -26,6 +26,10 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/gb-agent/gb-agent.component').then(m => m.GbAgentComponent)
   },
   {
+    path: 'privacy',
+    loadComponent: () => import('./pages/privacy/privacy.component').then(m => m.PrivacyComponent)
+  },
+  {
     path: '**',
     redirectTo: ''
   }
