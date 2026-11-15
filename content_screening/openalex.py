@@ -242,17 +242,17 @@ def _work_to_article(
 # --- Signals ----------------------------------------------------------------
 
 
-def _topic_works(cfg: DiscoveryConfig, from_date: str) -> Iterator[tuple[dict, str]]:
+def _topic_works(cfg: DiscoveryConfig, date_filter: str) -> Iterator[tuple[dict, str]]:
     """Recent works with any of the configured topics (signal: ``topic``)."""
     topic_ids = [t["id"] for t in cfg.topics if t.get("id")]
     if not topic_ids:
         return
-    filter_str = f"topics.id:{'|'.join(topic_ids)},from_publication_date:{from_date}"
+    filter_str = f"topics.id:{'|'.join(topic_ids)},{date_filter}"
     for work in _paginate_works(filter_str, cfg.mailto):
         yield work, "topic"
 
 
-def _author_works(cfg: DiscoveryConfig, from_date: str) -> Iterator[tuple[dict, str]]:
+def _author_works(cfg: DiscoveryConfig, date_filter: str) -> Iterator[tuple[dict, str]]:
     """Recent works by monitored authors (signal: ``author``).
 
     Splits the watchlist into OpenAlex author IDs (start with 'A') and ORCIDs.
@@ -263,7 +263,7 @@ def _author_works(cfg: DiscoveryConfig, from_date: str) -> Iterator[tuple[dict, 
     for author_ids in _batched(ids, CITES_BATCH):
         filter_str = (
             f"authorships.author.id:{'|'.join(author_ids)},"
-            f"from_publication_date:{from_date}"
+            f"{date_filter}"
         )
         for work in _paginate_works(filter_str, cfg.mailto):
             yield work, "author"
@@ -271,25 +271,25 @@ def _author_works(cfg: DiscoveryConfig, from_date: str) -> Iterator[tuple[dict, 
     for orcid_batch in _batched(orcids, CITES_BATCH):
         filter_str = (
             f"authorships.author.orcid:{'|'.join(orcid_batch)},"
-            f"from_publication_date:{from_date}"
+            f"{date_filter}"
         )
         for work in _paginate_works(filter_str, cfg.mailto):
             yield work, "author"
 
 
-def _citers_of(seed_ids: List[str], cfg: DiscoveryConfig, from_date: str, signal: str) -> Iterator[tuple[dict, str]]:
+def _citers_of(seed_ids: List[str], cfg: DiscoveryConfig, date_filter: str, signal: str) -> Iterator[tuple[dict, str]]:
     """Recent works citing any of ``seed_ids`` (batched into ``cites:`` filters)."""
     for batch in _batched(seed_ids, CITES_BATCH):
-        filter_str = f"cites:{'|'.join(batch)},from_publication_date:{from_date}"
+        filter_str = f"cites:{'|'.join(batch)},{date_filter}"
         for work in _paginate_works(filter_str, cfg.mailto):
             yield work, signal
 
 
-def _seed_citers(cfg: DiscoveryConfig, from_date: str) -> Iterator[tuple[dict, str]]:
+def _seed_citers(cfg: DiscoveryConfig, date_filter: str) -> Iterator[tuple[dict, str]]:
     """Citers of explicitly configured seed papers (signal: ``citation``)."""
     if not cfg.seed_papers:
         return
-    yield from _citers_of(list(cfg.seed_papers), cfg, from_date, "citation")
+    yield from _citers_of(list(cfg.seed_papers), cfg, date_filter,"citation")
 
 
 def _resolve_institution_seed_works(institution: dict, mailto: str) -> List[str]:
@@ -319,7 +319,7 @@ def _resolve_institution_seed_works(institution: dict, mailto: str) -> List[str]
     return seed_ids
 
 
-def _institution_citers(cfg: DiscoveryConfig, from_date: str) -> Iterator[tuple[dict, str]]:
+def _institution_citers(cfg: DiscoveryConfig, date_filter: str) -> Iterator[tuple[dict, str]]:
     """Citers of watched institutions' first/last-author works (signal: ``institution``)."""
     for institution in cfg.institutions:
         seed_ids = _resolve_institution_seed_works(institution, cfg.mailto)
@@ -329,7 +329,7 @@ def _institution_citers(cfg: DiscoveryConfig, from_date: str) -> Iterator[tuple[
             len(seed_ids),
             institution.get("author_positions"),
         )
-        yield from _citers_of(seed_ids, cfg, from_date, "institution")
+        yield from _citers_of(seed_ids, cfg, date_filter,"institution")
 
 
 def _publisher_trusted(publisher: Optional[str], trusted: frozenset) -> bool:
@@ -383,8 +383,13 @@ def fetch_openalex_articles(
     config: Optional[DiscoveryConfig] = None,
     lookback_days: int = SCAN_LOOKBACK_DAYS,
     keywords: Optional[Iterable[str]] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
 ) -> List[Article]:
     """Fetch candidate articles from all configured OpenAlex signals.
+
+    Works published from ``lookback_days`` ago, or within ``[from_date,
+    to_date]`` (inclusive) when given, as the seed backfill does.
 
     ``config`` and ``keywords`` default to the active profile's. Works surfaced
     by multiple signals are merged into a single ``Article`` with the union of
@@ -399,7 +404,10 @@ def fetch_openalex_articles(
     if not config.mailto:
         config = replace(config, mailto=DEFAULT_MAILTO)
 
-    from_date = _from_date(lookback_days)
+    start = from_date.isoformat() if from_date else _from_date(lookback_days)
+    date_filter = f"from_publication_date:{start}"
+    if to_date:
+        date_filter += f",to_publication_date:{to_date.isoformat()}"
 
     # Topic keyword gate: works surfaced *only* by a broad (require_keyword) topic
     # must also match a profile keyword; works matching a focused topic are ungated.
@@ -415,10 +423,10 @@ def fetch_openalex_articles(
         p.strip().lower() for p in config.trusted_publishers if p and p.strip()
     }
     signal_streams = (
-        _topic_works(config, from_date),
-        _author_works(config, from_date),
-        _seed_citers(config, from_date),
-        _institution_citers(config, from_date),
+        _topic_works(config, date_filter),
+        _author_works(config, date_filter),
+        _seed_citers(config, date_filter),
+        _institution_citers(config, date_filter),
     )
 
     by_id: Dict[str, Article] = {}

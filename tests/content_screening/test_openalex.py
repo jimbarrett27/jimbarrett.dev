@@ -424,3 +424,26 @@ def _today_window():
     from content_screening.constants import SCAN_LOOKBACK_DAYS
 
     return (date.today() - timedelta(days=SCAN_LOOKBACK_DAYS)).isoformat()
+
+
+def test_date_window_filters(monkeypatch):
+    """The seed backfill's [from_date, to_date] window reaches every signal's filter."""
+    from datetime import date
+
+    from content_screening import openalex
+    from content_screening.profile import DiscoveryConfig
+
+    filters = []
+
+    def fake_paginate(filter_str, mailto, select=openalex.WORK_SELECT):
+        filters.append(filter_str)
+        return iter(())
+
+    monkeypatch.setattr(openalex, "_paginate_works", fake_paginate)
+    cfg = DiscoveryConfig(mailto="x", topics=[{"id": "T1"}], monitored_authors=["A1"],
+                          seed_papers=["W1"])
+    openalex.fetch_openalex_articles(cfg, keywords=[], from_date=date(2026, 10, 1),
+                                     to_date=date(2026, 10, 31))
+    assert len(filters) == 3
+    for f in filters:
+        assert f.endswith("from_publication_date:2026-10-01,to_publication_date:2026-10-31")
