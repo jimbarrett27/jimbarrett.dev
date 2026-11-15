@@ -69,8 +69,9 @@ def test_every_shipped_profile_loads():
 
 
 class TestActiveProfile:
-    def test_defaults_to_pv(self):
-        assert get_active_profile().name == "pv"
+    def test_defaults_to_fincrime(self, monkeypatch):
+        monkeypatch.delenv(PROFILE_ENV_VAR)
+        assert get_active_profile().name == "fincrime"
 
     def test_env_var_selects_profile(self, monkeypatch, tmp_path):
         _write(tmp_path, "demo", MINIMAL)

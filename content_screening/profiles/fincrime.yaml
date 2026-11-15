@@ -1,7 +1,7 @@
-# Financial crime / fraud prevention, GenAI data science. DRAFT for review.
+# Financial crime / fraud prevention, GenAI data science. The default profile.
 #
-# Not active yet: the daily scan stays on the PV profile until the seed backfill
-# (REWORK_PLAN 1.5) has run. Activate with CONTENT_SCREENING_PROFILE=fincrime.
+# Until the seed backfill (REWORK_PLAN 1.5) sets `threshold`, the daily scan
+# screens and stores papers but queues none of them.
 #
 # Volumes below were measured on 2026-11-15 over the previous month. The goal is
 # narrow discovery: a few papers a day screened, not hundreds.

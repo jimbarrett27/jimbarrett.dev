@@ -7,7 +7,7 @@ prose interest description that fills the screening prompt, the screening model,
 and the rubric and threshold used to score papers.
 
 Exactly one profile is active at a time, chosen by ``CONTENT_SCREENING_PROFILE``
-(default ``pv``). Its name is stored on every article screened under it, so the
+(default ``fincrime``). Its name is stored on every article screened under it, so the
 fields never get mixed up in training data.
 
 The OpenAlex contact address is deliberately not part of a profile; it lives in
@@ -25,7 +25,7 @@ from content_screening.constants import MODULE_ROOT
 
 PROFILES_DIR = MODULE_ROOT / "profiles"
 PROFILE_ENV_VAR = "CONTENT_SCREENING_PROFILE"
-DEFAULT_PROFILE = "pv"
+DEFAULT_PROFILE = "fincrime"
 
 
 @dataclass
@@ -165,5 +165,5 @@ def active_profile_name() -> str:
 
 
 def get_active_profile() -> Profile:
-    """The profile selected by ``CONTENT_SCREENING_PROFILE`` (default ``pv``)."""
+    """The profile selected by ``CONTENT_SCREENING_PROFILE`` (default ``fincrime``)."""
     return load_profile(active_profile_name())
