@@ -45,6 +45,6 @@ def test_sends_all_pages_in_one_call_and_strips_fences(monkeypatch):
 
     assert transcribe.transcribe(pages, caption="Ideas") == "## Ideas\n- one"
     [(params, images, model)] = calls
-    assert params == {"pages": 2, "caption": "Ideas"}
+    assert params == {"pages": 2, "caption": "Ideas", "context": ""}
     assert images == pages
     assert model == transcribe.MODEL

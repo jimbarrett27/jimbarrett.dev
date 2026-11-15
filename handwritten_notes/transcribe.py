@@ -6,6 +6,7 @@ from pathlib import Path
 from PIL import Image, ImageOps
 
 from llm.llm_util import get_vision_response
+from notes_routing import context
 
 MODEL = "anthropic/claude-sonnet-5.5"
 PROMPT = Path(__file__).parent / "prompts" / "transcribe.jinja2"
@@ -41,6 +42,7 @@ def transcribe(pages: list[tuple[bytes, str]], caption: str | None = None,
                model: str = MODEL) -> str:
     """Transcribe all pages in one call, so text running across a page break stays whole."""
     images = [prepare(data, mime) for data, mime in pages]
-    text = get_vision_response(str(PROMPT), {"pages": len(pages), "caption": caption or ""},
+    text = get_vision_response(str(PROMPT), {"pages": len(pages), "caption": caption or "",
+                                               "context": context.about()},
                                images, model_name=model)
     return _strip_fences(text)

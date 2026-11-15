@@ -14,6 +14,7 @@ import threading
 
 import numpy as np
 
+from notes_routing import context
 from util.logging_util import setup_logger
 
 logger = setup_logger(__name__)
@@ -48,12 +49,15 @@ def transcribe(samples: np.ndarray) -> str:
     """16 kHz mono float32 samples -> English text. Blocking; call off the event loop."""
     if len(samples) == 0:
         return ""
+    # Names and jargon from the vault's context note, which Whisper otherwise
+    # spells however it likes.
+    hotwords = ", ".join(context.vocabulary()) or None
     with _lock:
         # The default VAD padding clipped a lone "verisimilitude" to
         # "Verisimilar-tude"; a full second each side keeps word edges intact.
         segments, _ = _model().transcribe(
             samples, language=LANGUAGE, beam_size=5,
-            vad_filter=True, vad_parameters={"speech_pad_ms": 1000},
+            vad_filter=True, vad_parameters={"speech_pad_ms": 1000}, hotwords=hotwords,
         )
         # segments is a lazy generator: the decoding happens while it's consumed,
         # so that has to stay inside the lock too.

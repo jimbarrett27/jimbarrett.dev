@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from handwritten_notes import mermaid
 from handwritten_notes.transcribe import MODEL, _strip_fences, prepare
 from llm.llm_util import get_vision_response
+from notes_routing import context
 from util.logging_util import setup_logger
 
 logger = setup_logger(__name__)
@@ -182,7 +183,8 @@ def render_plot(spec: PlotSpec, fmt: Literal["svg", "png"] = "svg") -> bytes:
 
 def redraw_flowchart(page: tuple[bytes, str], description: str, model: str = FIGURE_MODEL) -> str:
     source = _strip_fences(get_vision_response(
-        str(FLOWCHART_PROMPT), {"description": description}, [prepare(*page)], model_name=model))
+        str(FLOWCHART_PROMPT), {"description": description, "context": context.about()},
+        [prepare(*page)], model_name=model))
     if not source.startswith(MERMAID_TYPES):
         raise ValueError(f"not a Mermaid diagram: {source[:80]!r}")
     return source
@@ -190,7 +192,8 @@ def redraw_flowchart(page: tuple[bytes, str], description: str, model: str = FIG
 
 def redraw_plot(page: tuple[bytes, str], description: str, model: str = FIGURE_MODEL) -> PlotSpec:
     raw = _strip_fences(get_vision_response(
-        str(PLOT_PROMPT), {"description": description}, [prepare(*page)], model_name=model))
+        str(PLOT_PROMPT), {"description": description, "context": context.about()},
+        [prepare(*page)], model_name=model))
     return PlotSpec.model_validate_json(raw)
 
 

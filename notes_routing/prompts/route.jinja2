@@ -7,6 +7,12 @@ The vault's folders{% if not folders %} (there are none yet){% endif %}:
   About: {{ f.about | replace("\n", " ") }}{% endif %}{% if f.recent %}
   Recent notes: {{ f.recent | join("; ") }}{% endif %}
 {% endfor %}
+{% if context %}
+Background on the writer, for knowing what their notes are about:
+<context>
+{{ context }}
+</context>
+{% endif %}
 {% if hint %}
 The writer captioned the note: "{{ hint }}"
 {% endif %}
