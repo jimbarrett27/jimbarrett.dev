@@ -18,6 +18,7 @@ from photos.photos_bot import get_handlers as get_photo_handlers
 from voice_notes.voice_notes_bot import get_handlers as get_voice_notes_handlers, preload_model
 from handwritten_notes.handwritten_bot import get_handlers as get_handwritten_notes_handlers
 from handwritten_notes import remarkable
+from remarkable_drive import watcher as remarkable_drive
 from text_notes.text_notes_bot import get_handlers as get_text_notes_handlers
 from dnd.database import init_db as init_dnd_db
 from dnd.dnd_bot import get_handlers as get_dnd_handlers
@@ -198,6 +199,10 @@ def build_voice_notes_app() -> Application:
         app.job_queue.run_once(preload_model, when=0)
         # Notebooks emailed from the reMarkable join the handwritten notes pipeline.
         app.job_queue.run_repeating(remarkable.poll, interval=remarkable.POLL_INTERVAL_SECONDS, first=60)
+        # ...and so do notebooks exported to reMarkable/Notes in Drive (the email route is
+        # the fallback until Drive has proved itself; see content_screening/REWORK_PLAN.md).
+        app.job_queue.run_repeating(remarkable_drive.poll,
+                                    interval=remarkable_drive.POLL_INTERVAL_SECONDS, first=90)
     return app
 
 

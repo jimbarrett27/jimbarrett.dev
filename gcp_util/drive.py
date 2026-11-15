@@ -120,17 +120,34 @@ def list_files(folder_id: str, service=None) -> list[dict]:
     return _list(service, f"'{_quote(folder_id)}' in parents and trashed = false")
 
 
-def download_file(file_id: str, dest: Path, service=None) -> Path:
-    """Download a (non-Google-Docs) file's bytes to ``dest``."""
+def download_bytes(file_id: str, service=None) -> bytes:
+    """A (non-Google-Docs) file's content."""
     service = service or get_drive_service()
-    dest.parent.mkdir(parents=True, exist_ok=True)
     buffer = io.BytesIO()
     downloader = MediaIoBaseDownload(buffer, service.files().get_media(fileId=file_id))
     done = False
     while not done:
         _, done = downloader.next_chunk()
-    dest.write_bytes(buffer.getvalue())
+    return buffer.getvalue()
+
+
+def download_file(file_id: str, dest: Path, service=None) -> Path:
+    """Download a (non-Google-Docs) file's bytes to ``dest``."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(download_bytes(file_id, service))
     return dest
+
+
+def move_file(file_id: str, folder_id: str, service=None) -> None:
+    """Move a file into ``folder_id``, out of whatever folder(s) it was in."""
+    service = service or get_drive_service()
+    parents = service.files().get(fileId=file_id, fields="parents").execute().get("parents", [])
+    service.files().update(
+        fileId=file_id,
+        addParents=folder_id,
+        removeParents=",".join(parents),
+        fields="id",
+    ).execute()
 
 
 def upload_file(
