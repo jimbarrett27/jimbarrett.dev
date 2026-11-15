@@ -1,0 +1,26 @@
+You are reading the handwritten annotations someone made on a printed research paper.
+Each attached image is one annotation: their pen strokes only, cropped from the page,
+with the printed page removed. They are numbered in the order attached, 1 to
+{{ marks|length }}. Writing in a margin is often rotated: read it at whatever angle it
+was written.
+
+For each annotation you are told what printed text it sits on or beside:
+{% for mark in marks %}
+{{ loop.index }}. {{ mark.where }}{% if mark.text %}: "{{ mark.text }}"{% endif %}
+{% endfor %}
+
+For each annotation decide whether it is writing or only a mark:
+- "note": words, symbols with a meaning ("?", "!", "≈") or maths. Transcribe exactly
+  what is written. Do not correct spelling, expand abbreviations or add anything.
+  Maths becomes LaTeX in `$...$`. A word you cannot read is `[illegible]`; a good guess
+  you are unsure of is followed by `[?]`. These are a reader's notes on a research
+  paper: where the letters are ambiguous, prefer the reading that makes a real word or
+  technical term over one that doesn't. Use the printed text only to help read the
+  handwriting (names, terms, abbreviations), never to fill a gap.
+- "mark": no words, only a gesture: a loop or circle round text, an underline, a
+  bracket, a tick, a star, an arrow, a squiggle. Give a short label, e.g. "circled",
+  "bracket", "star", "tick", "arrow".
+An annotation that is a loop with writing beside it is a "note"; transcribe the writing.
+
+Reply with a JSON array and nothing else, one object per annotation in order:
+[{"n": 1, "kind": "note", "text": "..."}, {"n": 2, "kind": "mark", "text": "circled"}]
