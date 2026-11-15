@@ -509,3 +509,58 @@ class TestCleanSummary:
 
     def test_leaves_clean_summary_untouched(self):
         assert _clean_summary("Just a plain abstract.") == "Just a plain abstract."
+
+
+class TestApiPageRetries:
+    """The arXiv API's intermittent failures are retried with backoff."""
+
+    ERROR_FEED = (
+        '<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Error</title>'
+        "<summary>internal error</summary></entry></feed>"
+    )
+    OK_FEED = (
+        '<feed xmlns="http://www.w3.org/2005/Atom" '
+        'xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">'
+        "<opensearch:totalResults>1</opensearch:totalResults>"
+        "<entry><id>http://arxiv.org/abs/2610.00001v1</id><title>Fraud</title></entry></feed>"
+    )
+
+    def _session(self, replies):
+        import requests
+        from types import SimpleNamespace
+
+        replies = list(replies)
+
+        def get(url, params, timeout):
+            reply = replies.pop(0)
+            if reply == 500:
+                def raise_for_status():
+                    raise requests.HTTPError("500")
+            else:
+                def raise_for_status():
+                    return None
+            return SimpleNamespace(text=reply if reply != 500 else "",
+                                   raise_for_status=raise_for_status)
+
+        return SimpleNamespace(get=get)
+
+    def test_recovers_after_a_bad_patch(self, monkeypatch):
+        from content_screening import arxiv_feed
+
+        sleeps = []
+        monkeypatch.setattr(arxiv_feed.time, "sleep", sleeps.append)
+        session = self._session([500, self.ERROR_FEED, 500, self.ERROR_FEED, self.OK_FEED])
+        feed = arxiv_feed._api_page("q", 0, session)
+        assert feed["entries"][0]["title"] == "Fraud"
+        assert sleeps == [3.0, 10.0, 20.0, 40.0, 80.0]
+
+    def test_gives_up_eventually(self, monkeypatch):
+        from content_screening import arxiv_feed
+
+        sleeps = []
+        monkeypatch.setattr(arxiv_feed.time, "sleep", sleeps.append)
+        session = self._session([500] * arxiv_feed.API_RETRIES)
+        with pytest.raises(RuntimeError):
+            arxiv_feed._api_page("q", 0, session)
+        assert max(sleeps) == arxiv_feed.API_MAX_BACKOFF_SECONDS
+        assert sum(sleeps) > 400
