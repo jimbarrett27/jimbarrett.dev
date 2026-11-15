@@ -8,7 +8,7 @@
 
 name: fincrime
 
-model: deepseek/deepseek-v4.1-flash
+model: deepseek/deepseek-v4.1-flash-1017
 
 description: |
   You are assessing research papers for a data scientist joining the financial-crime
