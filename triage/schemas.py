@@ -46,6 +46,10 @@ class PaperOut(BaseModel):
     zotero_error: str | None
     obsidian_path: str | None
     obsidian_error: str | None
+    # reMarkable via Drive: the uploaded file, the last failure, or no open-access PDF.
+    drive_file_id: str | None = None
+    drive_error: str | None = None
+    pdf_unavailable: bool = False
     # Retry bookkeeping for failed routing (step 8). `next_retry_at` is the
     # scheduled time of the next attempt, or null when complete / given up.
     routing_attempts: int
@@ -74,6 +78,9 @@ class PaperOut(BaseModel):
             zotero_error=article.zotero_error,
             obsidian_path=article.obsidian_path,
             obsidian_error=article.obsidian_error,
+            drive_file_id=article.drive_file_id,
+            drive_error=article.drive_error,
+            pdf_unavailable=bool(article.pdf_unavailable),
             routing_attempts=article.routing_attempts,
             next_retry_at=article.next_retry_at,
         )

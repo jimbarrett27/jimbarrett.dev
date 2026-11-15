@@ -27,6 +27,11 @@ export interface Paper {
   zotero_error: string | null;
   obsidian_path: string | null;
   obsidian_error: string | null;
+  /** reMarkable via Drive. Optional: an older backend omits them. */
+  drive_file_id?: string | null;
+  drive_error?: string | null;
+  /** No open-access PDF was found, so nothing was sent to the tablet. */
+  pdf_unavailable?: boolean;
   /** How many routing attempts have been made (initial + retries). */
   routing_attempts: number;
   /** ISO 8601 UTC time of the next scheduled retry; null when done or given up. */

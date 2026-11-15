@@ -17,6 +17,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -109,6 +110,13 @@ class ArticleORM(Base):
     zotero_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     obsidian_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     obsidian_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # --- reMarkable (kept papers sent to the tablet via Drive; migration 005) ---
+    drive_file_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    drive_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # No open-access PDF found: Drive routing is complete without an upload.
+    pdf_unavailable: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     routing_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     next_retry_at: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
