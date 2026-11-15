@@ -28,13 +28,17 @@ by a reboot rather than by any decision to deploy it.
 /home/jim/repos/jimbarrett.dev/deploy/deploy.sh
 ```
 
-[`deploy.sh`](deploy.sh) does four things:
+[`deploy.sh`](deploy.sh) does five things:
 
 1. Fetches and moves the deploy checkout to a detached `origin/main`.
 2. Runs `npm ci` and `ng build triage` in its `website/`.
 3. Syncs `dist/triage/browser/` into `/home/jim/data/triage-web`. It syncs in
    place rather than replacing the directory, because Caddy bind-mounts it.
-4. Restarts `telegram-bot` and `triage-backend`. This asks for your sudo password.
+4. Runs the `content_screening` Alembic migrations against
+   `/home/jim/data/content_screening.db`, if any are pending, first copying the
+   database to `content_screening.db.pre-migration`. New code's ORM expects the new
+   columns, so this has to happen before the restart.
+5. Restarts `telegram-bot` and `triage-backend`. This asks for your sudo password.
    It also restarts the `gb-agent` user unit, if it's installed (no sudo; see below).
 
 Then check it came up, and confirm which commit is live:
