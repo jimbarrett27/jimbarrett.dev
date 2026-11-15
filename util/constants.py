@@ -6,8 +6,3 @@ REPO_ROOT = Path(__file__).parent.parent
 LLM_SERVER_ADDRESS = "http://debian-server:8080"
 
 GRAMMAR_DIR = REPO_ROOT / "llm/grammars"
-
-# Note: INTERESTING_ARXIV_CATEGORIES and PV_KEYWORDS have been moved to
-# content_screening/constants.py. Import from there for new code.
-# These re-exports are kept for backwards compatibility with util/arxiv.py.
-from content_screening.constants import INTERESTING_ARXIV_CATEGORIES, PV_KEYWORDS

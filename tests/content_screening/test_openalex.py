@@ -92,7 +92,7 @@ def _sample_work(**overrides) -> dict:
 
 class TestWorkToArticle:
     def test_maps_core_fields(self):
-        art = _work_to_article(_sample_work(), ["topic"])
+        art = _work_to_article(_sample_work(), ["topic"], {"adverse", "drug"})
         assert art is not None
         assert art.external_id == "W42"
         assert art.source_type == SourceType.OPENALEX

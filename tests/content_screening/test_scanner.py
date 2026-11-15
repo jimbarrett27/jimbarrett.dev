@@ -50,7 +50,7 @@ class TestProcessNewArticlesStatus:
         monkeypatch.setattr(
             scanner,
             "screen_article",
-            lambda _a: (is_relevant, score, "reason", ["tag"], "skim"),
+            lambda _a, _profile=None: (is_relevant, score, "reason", ["tag"], "skim"),
         )
         monkeypatch.setattr(
             scanner,
@@ -59,6 +59,17 @@ class TestProcessNewArticlesStatus:
         )
 
         return scanner.process_new_articles(articles)
+
+    def test_rows_are_stamped_with_profile_and_model(self, temp_db, monkeypatch):
+        """Every inserted row records the profile and model that screened it."""
+        self._run([_make_article("stamp-001")], monkeypatch, is_relevant=False)
+
+        with db_engine.get_session() as session:
+            row = session.scalars(
+                select(ArticleORM).where(ArticleORM.external_id == "stamp-001")
+            ).one()
+            stamped = (row.profile, row.screening_model, row.rubric_answers)
+        assert stamped == ("pv", "deepseek/deepseek-v4.1-flash", None)
 
     def test_relevant_article_inserted_as_pending(self, temp_db, monkeypatch):
         """A screener-relevant article lands with status='pending'."""
@@ -92,7 +103,7 @@ class TestProcessNewArticlesStatus:
         relevant_ids = {"rel-A", "rel-B"}
         non_relevant_ids = {"rej-X", "rej-Y"}
 
-        def fake_screen(article):
+        def fake_screen(article, profile=None):
             is_rel = article.external_id in relevant_ids
             return (is_rel, 0.8 if is_rel else 0.0, "r", [], "skim")
 

@@ -5,54 +5,20 @@ Generic RSS feed fetching and processing.
 import hashlib
 import re
 import time
-from dataclasses import dataclass
 from datetime import date
-from pathlib import Path
 from typing import List, Optional
 
 import feedparser  # type: ignore
-import yaml
 from html2text import html2text
 
-from content_screening.constants import (
-    MODULE_ROOT,
-    PV_KEYWORDS,
-    SCAN_LOOKBACK_DAYS,
-    find_matching_keywords,
-)
+from content_screening.constants import SCAN_LOOKBACK_DAYS, find_matching_keywords
 from content_screening.models import Article, SourceType
+from content_screening.profile import FeedConfig, Profile, get_active_profile
 from util.logging_util import setup_logger
 
 logger = setup_logger(__name__)
 
-FEEDS_CONFIG_PATH = MODULE_ROOT / "data" / "feeds.yaml"
-
-
-@dataclass
-class FeedConfig:
-    """Configuration for a single RSS feed."""
-    name: str
-    url: str
-    category: Optional[str] = None
-
-
-def load_feed_configs(config_path: Path = FEEDS_CONFIG_PATH) -> List[FeedConfig]:
-    """Load feed configurations from YAML file."""
-    if not config_path.exists():
-        logger.warning(f"Feed config not found at {config_path}")
-        return []
-
-    with open(config_path, "r") as f:
-        data = yaml.safe_load(f)
-
-    feeds = []
-    for feed_data in data.get("feeds", []):
-        feeds.append(FeedConfig(
-            name=feed_data["name"],
-            url=feed_data["url"],
-            category=feed_data.get("category"),
-        ))
-    return feeds
+__all__ = ["FeedConfig", "fetch_rss_articles"]
 
 
 def _generate_external_id(entry: dict, feed_url: str) -> str:
@@ -150,9 +116,9 @@ def _strip_metadata_preamble(text: str) -> str:
     return re.sub(r"\n{2,}", "\n\n", cleaned).strip()
 
 
-def _find_matching_keywords(text: str) -> List[str]:
-    """Find PV keywords that match in the given text (delegates to the shared helper)."""
-    return find_matching_keywords(text, PV_KEYWORDS)
+def _find_matching_keywords(text: str, keywords) -> List[str]:
+    """Find profile keywords that match in the given text (delegates to the shared helper)."""
+    return find_matching_keywords(text, keywords)
 
 
 def _is_recent(entry: dict, lookback_days: int = SCAN_LOOKBACK_DAYS) -> bool:
@@ -175,23 +141,27 @@ def _is_recent(entry: dict, lookback_days: int = SCAN_LOOKBACK_DAYS) -> bool:
 def fetch_rss_articles(
     feed_configs: List[FeedConfig] = None,
     filter_by_keywords: bool = True,
-    keywords: set = None
+    keywords: set = None,
+    profile: Profile = None,
 ) -> List[Article]:
     """
     Fetch articles from RSS feeds.
 
     Args:
-        feed_configs: Feed configurations to fetch from. Defaults to loading from YAML.
-        filter_by_keywords: Whether to filter by PV keywords.
-        keywords: Keywords to filter by. Defaults to PV_KEYWORDS.
+        feed_configs: Feed configurations to fetch from. Defaults to the profile's.
+        filter_by_keywords: Whether to filter by the profile's keywords.
+        keywords: Keywords to filter by. Defaults to the profile's.
+        profile: Interest profile. Defaults to the active one.
 
     Returns:
         List of Article objects matching the criteria.
     """
+    if feed_configs is None or keywords is None:
+        profile = profile or get_active_profile()
     if feed_configs is None:
-        feed_configs = load_feed_configs()
+        feed_configs = list(profile.feeds)
     if keywords is None:
-        keywords = PV_KEYWORDS
+        keywords = profile.keywords
 
     if not feed_configs:
         logger.warning("No RSS feeds configured")
@@ -239,7 +209,7 @@ def fetch_rss_articles(
 
             if filter_by_keywords:
                 search_text = f"{title} {abstract}"
-                matching_keywords = _find_matching_keywords(search_text)
+                matching_keywords = _find_matching_keywords(search_text, keywords)
                 if not matching_keywords:
                     continue
             else:

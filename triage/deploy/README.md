@@ -21,7 +21,7 @@ browser (on tailnet) ──https──▶ Caddy :443 ─┬─ /api/*  ──▶
 > **History:** until October 2026 the UI was the `/triage` route of
 > jimbarrett.dev on App Engine. It called `triage-api.jimbarrett.dev` cross-origin,
 > through a Cloudflare Tunnel gated by Cloudflare Access. The backend's
-> `TRIAGE_REQUIRE_CF_ACCESS` guard is left over from that setup and is now off.
+> `TRIAGE_REQUIRE_CF_ACCESS` guard from that setup was removed in November 2026.
 
 ## Pieces
 

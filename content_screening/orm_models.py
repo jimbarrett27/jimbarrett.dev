@@ -23,12 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 
-from content_screening.models import (
-    Article,
-    ArticleRating,
-    PendingNotification,
-    SourceType,
-)
+from content_screening.models import Article, SourceType
 
 
 class JSONEncodedList(TypeDecorator):
@@ -65,6 +60,19 @@ class JSONEncodedDict(TypeDecorator):
         return json.loads(value)
 
 
+class NullableJSON(TypeDecorator):
+    """Any JSON value, with SQL NULL kept distinct from an empty container."""
+
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect) -> Optional[str]:
+        return None if value is None else json.dumps(value)
+
+    def process_result_value(self, value: Optional[str], dialect):
+        return None if value is None else json.loads(value)
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -95,6 +103,14 @@ class ArticleORM(Base):
         "metadata", JSONEncodedDict, nullable=True
     )
 
+    # --- Interest profile (migration 006) ---
+    # Profile the article was screened under. Every row has one: the PV era was
+    # backfilled to 'pv'. Nullable at the DB level only because SQLite can't add
+    # a NOT NULL column without a default.
+    profile: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    screening_model: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    rubric_answers: Mapped[Optional[dict]] = mapped_column(NullableJSON, nullable=True)
+
     # --- Triage fields (consumed by the triage UI; the Telegram bot ignores them) ---
     # Screening LLM routing hint: 'file' | 'skim' | 'deep'.
     suggested_depth: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -103,6 +119,8 @@ class ArticleORM(Base):
     #   'kept'          – user kept it → Zotero + Obsidian
     #   'dismissed'     – user rejected it
     #   'auto_rejected' – LLM screened out (score 0), never shown to user
+    #   'archived'      – screened as relevant but never triaged before its
+    #                     profile was retired (the PV queue); never shown
     # Legacy values 'deep' / 'filed' map to 'kept' (Chunk C migration).
     status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
     decided_at: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -126,12 +144,17 @@ class ArticleORM(Base):
         Index("idx_articles_discovered_at", "discovered_at"),
         Index("idx_articles_doi", "doi"),
         Index("idx_articles_status", "status", "discovered_at"),
+        Index("idx_articles_profile", "profile", "status"),
         Index(
             "idx_articles_retry",
             "next_retry_at",
             sqlite_where=text("next_retry_at IS NOT NULL"),
         ),
     )
+
+
+# The two tables below belong to the retired Telegram rating flow. Nothing reads
+# or writes them any more; they are kept so the old ratings survive.
 
 
 class ArticleRatingORM(Base):
@@ -191,6 +214,9 @@ def article_orm_to_dataclass(orm: ArticleORM) -> Article:
         suggested_depth=orm.suggested_depth,
         embedding=orm.embedding,
         metadata=orm.metadata_ or {},
+        profile=orm.profile,
+        screening_model=orm.screening_model,
+        rubric_answers=orm.rubric_answers,
     )
 
 
@@ -216,25 +242,9 @@ def article_dataclass_to_orm(
         suggested_depth=article.suggested_depth,
         embedding=article.embedding,
         metadata_=article.metadata if article.metadata else None,
+        profile=article.profile,
+        screening_model=article.screening_model,
+        rubric_answers=article.rubric_answers,
         status=status,
     )
 
-
-def rating_orm_to_dataclass(orm: ArticleRatingORM) -> ArticleRating:
-    """Convert an ArticleRatingORM instance to an ArticleRating dataclass."""
-    return ArticleRating(
-        id=orm.id,
-        article_id=orm.article_id,
-        rating=orm.rating,
-        rated_at=orm.rated_at,
-    )
-
-
-def notification_orm_to_dataclass(orm: PendingNotificationORM) -> PendingNotification:
-    """Convert a PendingNotificationORM instance to a PendingNotification dataclass."""
-    return PendingNotification(
-        id=orm.id,
-        article_id=orm.article_id,
-        notified_at=orm.notified_at,
-        rating_received=bool(orm.rating_received),
-    )

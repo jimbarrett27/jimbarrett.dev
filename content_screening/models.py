@@ -37,26 +37,15 @@ class Article:
     llm_interest_score: Optional[float] = None
     llm_reasoning: Optional[str] = None
     llm_tags: List[str] = field(default_factory=list)
-    # Triage routing hint from the screening LLM: 'file' | 'skim' | 'deep'.
-    # Consumed by the triage UI; the Telegram bot ignores it.
+    # PV-era triage routing hint from the screening LLM: 'file' | 'skim' | 'deep'.
+    # Kept for history; rubric scoring will stop writing it.
     suggested_depth: Optional[str] = None
     embedding: Optional[bytes] = None
     metadata: dict = field(default_factory=dict)
-
-
-@dataclass
-class ArticleRating:
-    """User rating for an article."""
-    article_id: int
-    rating: int
-    rated_at: int
-    id: Optional[int] = None
-
-
-@dataclass
-class PendingNotification:
-    """Tracks article notifications awaiting user rating."""
-    article_id: int
-    notified_at: int
-    id: Optional[int] = None
-    rating_received: bool = False
+    # Interest profile this article was screened under (e.g. 'pv', 'fincrime').
+    profile: Optional[str] = None
+    # OpenRouter model that screened it, so model evaluations can tell them apart.
+    screening_model: Optional[str] = None
+    # Raw per-statement rubric answers, keyed by statement id. None for rows
+    # scored before rubric scoring existed (the PV era).
+    rubric_answers: Optional[dict] = None

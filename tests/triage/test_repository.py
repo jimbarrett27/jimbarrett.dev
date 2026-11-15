@@ -60,6 +60,18 @@ class TestGetDecidedPapers:
 
         assert ids == []
 
+    def test_excludes_archived(self, memory_db):
+        """The archived PV queue was never triaged, so it isn't history."""
+        with db_engine.get_session() as session:
+            session.add(_make_orm("arch1", "archived"))
+            session.add(_make_orm("k1", "kept", decided_at="2026-06-10T00:00:00+00:00"))
+
+        with db_engine.get_session() as session:
+            from triage.repository import get_decided_papers
+            ids = [r.external_id for r in get_decided_papers(session)]
+
+        assert ids == ["k1"]
+
     def test_includes_kept(self, memory_db):
         with db_engine.get_session() as session:
             session.add(_make_orm("k1", "kept", decided_at="2026-06-01T12:00:00+00:00"))

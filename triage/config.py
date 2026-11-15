@@ -24,14 +24,6 @@ class Settings:
     # How long after a decision the user may still undo it.
     undo_window_seconds: int = 30
 
-    # --- Cloudflare Access (defence in depth) ---
-    # When enabled, every /api/triage request must carry a
-    # Cf-Access-Authenticated-User-Email header matching `allowed_email`.
-    # Off by default. Production no longer uses it either: the app is now only
-    # reachable over Tailscale, not through Cloudflare.
-    require_cf_access: bool = False
-    allowed_email: str = ""
-
     # Origins permitted by CORS. Empty (the production setting) disables it: Caddy
     # serves the UI and the API from the same origin.
     allowed_origins: tuple[str, ...] = field(default_factory=tuple)
@@ -80,9 +72,6 @@ def get_settings() -> Settings:
         host=os.environ.get("TRIAGE_HOST", "127.0.0.1"),
         port=int(os.environ.get("TRIAGE_PORT", "8077")),
         undo_window_seconds=int(os.environ.get("TRIAGE_UNDO_WINDOW_SECONDS", "30")),
-        require_cf_access=os.environ.get("TRIAGE_REQUIRE_CF_ACCESS", "false").lower()
-        in ("1", "true", "yes"),
-        allowed_email=os.environ.get("TRIAGE_ALLOWED_EMAIL", ""),
         allowed_origins=_csv(os.environ.get("TRIAGE_ALLOWED_ORIGINS", "")),
         obsidian_vault=os.environ.get("TRIAGE_OBSIDIAN_VAULT", ""),
         obsidian_inbox_subdir=os.environ.get(

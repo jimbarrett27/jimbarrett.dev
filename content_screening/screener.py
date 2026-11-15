@@ -3,10 +3,11 @@ LLM-based interest screening for articles.
 """
 
 import json
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from content_screening.constants import PROMPTS_DIR
 from content_screening.models import Article
+from content_screening.profile import Profile, get_active_profile
 from llm.llm_util import get_llm_response
 from util.logging_util import setup_logger
 
@@ -22,24 +23,31 @@ CONFIDENCE_SCORES = {"HIGH": 1.0, "MEDIUM": 0.6, "LOW": 0.3}
 VALID_DEPTHS = {"deep", "skim", "file"}
 
 
-def screen_article(article: Article) -> Tuple[bool, float, str, List[str], str]:
+def screen_article(
+    article: Article, profile: Optional[Profile] = None
+) -> Tuple[bool, float, str, List[str], str]:
     """
-    Screen an article using LLM to determine if it's relevant to pharmacovigilance.
+    Screen an article with the LLM against an interest profile.
 
     Args:
         article: The article to screen.
+        profile: Supplies the interest description and the model. Defaults to
+            the active profile.
 
     Returns:
         Tuple of (is_relevant, score 0.0-1.0, reasoning string, tags list,
         suggested_depth 'deep'|'skim'|'file').
     """
+    profile = profile or get_active_profile()
     try:
         response = get_llm_response(
             str(SCREEN_ARTICLE_TEMPLATE),
             {
+                "description": profile.description,
                 "title": article.title,
                 "abstract": article.abstract or "",
-            }
+            },
+            model_name=profile.model,
         )
 
         # Parse JSON response - handle potential markdown code blocks
@@ -80,20 +88,3 @@ def screen_article(article: Article) -> Tuple[bool, float, str, List[str], str]:
         # Default to relevant on error to avoid missing papers
         return True, 0.5, f"Error during screening: {e}", [], "file"
 
-
-def screen_and_update_article(article: Article) -> Article:
-    """
-    Screen an article and update it with the LLM's assessment.
-
-    Args:
-        article: The article to screen.
-
-    Returns:
-        The article with llm_interest_score, llm_reasoning, and llm_tags set.
-    """
-    is_relevant, score, reasoning, tags, suggested_depth = screen_article(article)
-    article.llm_interest_score = score if is_relevant else 0.0
-    article.llm_reasoning = reasoning
-    article.llm_tags = tags
-    article.suggested_depth = suggested_depth
-    return article

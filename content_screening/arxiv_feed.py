@@ -10,13 +10,9 @@ from typing import List
 import feedparser  # type: ignore
 from html2text import html2text
 
-from content_screening.constants import (
-    INTERESTING_ARXIV_CATEGORIES,
-    PV_KEYWORDS,
-    SCAN_LOOKBACK_DAYS,
-    find_matching_keywords,
-)
+from content_screening.constants import SCAN_LOOKBACK_DAYS, find_matching_keywords
 from content_screening.models import Article, SourceType
+from content_screening.profile import Profile, get_active_profile
 from util.logging_util import setup_logger
 
 logger = setup_logger(__name__)
@@ -67,9 +63,9 @@ def _extract_authors(entry: dict) -> List[str]:
     return []
 
 
-def _find_matching_keywords(text: str) -> List[str]:
-    """Find PV keywords that match in the given text (delegates to the shared helper)."""
-    return find_matching_keywords(text, PV_KEYWORDS)
+def _find_matching_keywords(text: str, keywords) -> List[str]:
+    """Find profile keywords that match in the given text (delegates to the shared helper)."""
+    return find_matching_keywords(text, keywords)
 
 
 def _is_recent(entry: dict, lookback_days: int = SCAN_LOOKBACK_DAYS) -> bool:
@@ -92,23 +88,27 @@ def _is_recent(entry: dict, lookback_days: int = SCAN_LOOKBACK_DAYS) -> bool:
 def fetch_arxiv_papers(
     categories: set = None,
     filter_by_keywords: bool = True,
-    keywords: set = None
+    keywords: set = None,
+    profile: Profile = None,
 ) -> List[Article]:
     """
     Fetch papers from ArXiv RSS feeds.
 
     Args:
-        categories: ArXiv categories to fetch from. Defaults to INTERESTING_ARXIV_CATEGORIES.
-        filter_by_keywords: Whether to filter by PV keywords.
-        keywords: Keywords to filter by. Defaults to PV_KEYWORDS.
+        categories: ArXiv categories to fetch from. Defaults to the profile's.
+        filter_by_keywords: Whether to filter by the profile's keywords.
+        keywords: Keywords to filter by. Defaults to the profile's.
+        profile: Interest profile. Defaults to the active one.
 
     Returns:
         List of Article objects matching the criteria.
     """
+    if categories is None or keywords is None:
+        profile = profile or get_active_profile()
     if categories is None:
-        categories = INTERESTING_ARXIV_CATEGORIES
+        categories = profile.arxiv_categories
     if keywords is None:
-        keywords = PV_KEYWORDS
+        keywords = profile.keywords
 
     seen_ids = set()
     articles = []
@@ -138,7 +138,7 @@ def fetch_arxiv_papers(
 
             if filter_by_keywords:
                 search_text = f"{title} {abstract}"
-                matching_keywords = _find_matching_keywords(search_text)
+                matching_keywords = _find_matching_keywords(search_text, keywords)
                 if not matching_keywords:
                     continue
             else:

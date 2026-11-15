@@ -8,22 +8,18 @@ from models.py, with conversion to/from ORM models handled internally.
 import html
 import re
 import time
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 from sqlalchemy import select, exists
 
 from content_screening.db_engine import get_engine, get_session
-from content_screening.models import Article, ArticleRating, PendingNotification, SourceType
+from content_screening.models import Article, SourceType
 from content_screening.orm_models import (
     Base,
     ArticleORM,
-    ArticleRatingORM,
-    PendingNotificationORM,
     ScanHistoryORM,
     article_orm_to_dataclass,
     article_dataclass_to_orm,
-    rating_orm_to_dataclass,
-    notification_orm_to_dataclass,
 )
 
 
@@ -182,94 +178,6 @@ def article_exists(source_type: SourceType, external_id: str) -> bool:
             )
         )
         return session.execute(stmt).scalar()
-
-
-def insert_rating(article_id: int, rating: int) -> int:
-    """Insert a rating for an article.
-
-    Returns the rating id.
-    """
-    orm = ArticleRatingORM(
-        article_id=article_id,
-        rating=rating,
-        rated_at=int(time.time()),
-    )
-
-    with get_session() as session:
-        session.add(orm)
-        session.flush()
-        return orm.id
-
-
-def get_ratings_for_article(article_id: int) -> List[ArticleRating]:
-    """Get all ratings for an article."""
-    with get_session() as session:
-        stmt = (
-            select(ArticleRatingORM)
-            .where(ArticleRatingORM.article_id == article_id)
-            .order_by(ArticleRatingORM.rated_at.desc())
-        )
-        orms = session.execute(stmt).scalars().all()
-        return [rating_orm_to_dataclass(orm) for orm in orms]
-
-
-def create_pending_notification(article_id: int) -> int:
-    """Create a pending notification for an article.
-
-    Returns the notification id. If notification already exists, returns 0.
-    """
-    with get_session() as session:
-        # Check if notification already exists (equivalent to INSERT OR IGNORE)
-        stmt = select(PendingNotificationORM).where(
-            PendingNotificationORM.article_id == article_id
-        )
-        existing = session.execute(stmt).scalar_one_or_none()
-        if existing is not None:
-            return 0
-
-        orm = PendingNotificationORM(
-            article_id=article_id,
-            notified_at=int(time.time()),
-            rating_received=0,
-        )
-        session.add(orm)
-        session.flush()
-        return orm.id
-
-
-def get_pending_notifications() -> List[PendingNotification]:
-    """Get all notifications awaiting a rating."""
-    with get_session() as session:
-        stmt = (
-            select(PendingNotificationORM)
-            .where(PendingNotificationORM.rating_received == 0)
-            .order_by(PendingNotificationORM.notified_at.asc())
-        )
-        orms = session.execute(stmt).scalars().all()
-        return [notification_orm_to_dataclass(orm) for orm in orms]
-
-
-def get_oldest_pending_notification() -> Optional[PendingNotification]:
-    """Get the oldest notification awaiting a rating."""
-    with get_session() as session:
-        stmt = (
-            select(PendingNotificationORM)
-            .where(PendingNotificationORM.rating_received == 0)
-            .order_by(PendingNotificationORM.notified_at.asc())
-            .limit(1)
-        )
-        orm = session.execute(stmt).scalar_one_or_none()
-        if orm is None:
-            return None
-        return notification_orm_to_dataclass(orm)
-
-
-def mark_notification_rated(notification_id: int):
-    """Mark a notification as having received a rating."""
-    with get_session() as session:
-        orm = session.get(PendingNotificationORM, notification_id)
-        if orm is not None:
-            orm.rating_received = 1
 
 
 def get_last_scan_time(source_type: SourceType) -> Optional[int]:

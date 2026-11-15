@@ -9,7 +9,6 @@ import pytest
 
 from content_screening.models import Article, SourceType
 from content_screening.rss_feed import (
-    FEEDS_CONFIG_PATH,
     FeedConfig,
     _authors_from_summary,
     _extract_authors,
@@ -18,8 +17,10 @@ from content_screening.rss_feed import (
     _generate_external_id,
     _strip_metadata_preamble,
     fetch_rss_articles,
-    load_feed_configs,
 )
+from content_screening.profile import load_profile
+
+PV = load_profile("pv")
 
 
 class TestScienceDirectPreamble:
@@ -45,43 +46,6 @@ class TestScienceDirectPreamble:
 
     def test_metadata_only_summary_strips_to_empty(self):
         assert _strip_metadata_preamble(self.SUMMARY) == ""
-
-
-class TestLoadFeedConfigs:
-    """Tests for load_feed_configs function."""
-
-    def test_load_valid_config(self, tmp_path: Path):
-        """Test loading a valid YAML config file."""
-        config_file = tmp_path / "feeds.yaml"
-        config_file.write_text("""
-feeds:
-  - name: "Test Feed 1"
-    url: "https://example.com/feed1.xml"
-    category: "papers"
-  - name: "Test Feed 2"
-    url: "https://example.com/feed2.xml"
-""")
-        configs = load_feed_configs(config_file)
-
-        assert len(configs) == 2
-        assert configs[0].name == "Test Feed 1"
-        assert configs[0].url == "https://example.com/feed1.xml"
-        assert configs[0].category == "papers"
-        assert configs[1].name == "Test Feed 2"
-        assert configs[1].category is None
-
-    def test_load_missing_config(self, tmp_path: Path):
-        """Test loading from non-existent file returns empty list."""
-        config_file = tmp_path / "nonexistent.yaml"
-        configs = load_feed_configs(config_file)
-        assert configs == []
-
-    def test_load_empty_config(self, tmp_path: Path):
-        """Test loading empty config returns empty list."""
-        config_file = tmp_path / "feeds.yaml"
-        config_file.write_text("feeds: []")
-        configs = load_feed_configs(config_file)
-        assert configs == []
 
 
 class TestGenerateExternalId:
@@ -219,7 +183,7 @@ class TestFindMatchingKeywords:
     def test_finds_matching_keywords(self):
         """Test finding keywords in text."""
         text = "This study examines adverse drug reactions in patients."
-        result = _find_matching_keywords(text)
+        result = _find_matching_keywords(text, PV.keywords)
         assert "adverse" in result
         assert "drug" in result
         assert "reaction" in result
@@ -227,7 +191,7 @@ class TestFindMatchingKeywords:
     def test_case_insensitive(self):
         """Test case-insensitive matching."""
         text = "DRUG ADVERSE REACTION"
-        result = _find_matching_keywords(text)
+        result = _find_matching_keywords(text, PV.keywords)
         assert "drug" in result
         assert "adverse" in result
         assert "reaction" in result
@@ -235,7 +199,7 @@ class TestFindMatchingKeywords:
     def test_partial_matching(self):
         """Test partial keyword matching (e.g., 'medic' matches 'medical')."""
         text = "Medical pharmaceutical duplication"
-        result = _find_matching_keywords(text)
+        result = _find_matching_keywords(text, PV.keywords)
         assert "medic" in result
         assert "pharma" in result
         assert "duplic" in result
@@ -243,7 +207,7 @@ class TestFindMatchingKeywords:
     def test_no_matches(self):
         """Test when no keywords match."""
         text = "This article is about machine learning algorithms."
-        result = _find_matching_keywords(text)
+        result = _find_matching_keywords(text, PV.keywords)
         assert result == []
 
 
@@ -528,13 +492,8 @@ class TestFetchRssArticles:
         assert articles == []
 
     @patch("content_screening.rss_feed.feedparser.parse")
-    def test_custom_keywords_parameter_not_used(self, mock_parse):
-        """Test that custom keywords parameter is currently not used.
-
-        Note: The `keywords` parameter in fetch_rss_articles() is accepted
-        but not actually used - the function always uses PV_KEYWORDS from
-        constants. This test documents this behavior.
-        """
+    def test_custom_keywords_override_profile(self, mock_parse):
+        """An explicit `keywords` argument replaces the profile's keywords."""
         mock_parse.return_value = {
             "status": 200,
             "entries": [
@@ -556,19 +515,22 @@ class TestFetchRssArticles:
         }
 
         feed_configs = [FeedConfig(name="Test Feed", url="https://feed.com/rss")]
-        # Even with custom keywords, PV_KEYWORDS are used
-        custom_keywords = {"neural", "learning"}
         articles = fetch_rss_articles(
             feed_configs,
             filter_by_keywords=True,
-            keywords=custom_keywords
+            keywords={"neural", "learning"},
         )
 
-        # Only article-2 matches because "drug" is in PV_KEYWORDS
-        # article-1 doesn't match because "neural"/"learning" are ignored
-        assert len(articles) == 1
-        assert articles[0].external_id == "article-2"
-        assert "drug" in articles[0].keywords_matched
+        assert [a.external_id for a in articles] == ["article-1"]
+        assert articles[0].keywords_matched == ["learning", "neural"]
+
+    @patch("content_screening.rss_feed.feedparser.parse")
+    def test_defaults_to_profile_feeds(self, mock_parse):
+        """With no feed configs given, the active profile's feeds are fetched."""
+        mock_parse.return_value = {"status": 200, "entries": []}
+        fetch_rss_articles()
+        fetched = {call.args[0] for call in mock_parse.call_args_list}
+        assert fetched == {f.url for f in PV.feeds}
 
 
 @pytest.mark.integration
@@ -580,10 +542,9 @@ class TestRssFeedIntegration:
     """
 
     def test_loads_configured_feeds(self):
-        """Test that feeds.yaml exists and can be loaded."""
-        assert FEEDS_CONFIG_PATH.exists(), f"feeds.yaml not found at {FEEDS_CONFIG_PATH}"
-        configs = load_feed_configs()
-        assert len(configs) > 0, "No feeds configured in feeds.yaml"
+        """The PV profile's feeds are well-formed."""
+        configs = list(PV.feeds)
+        assert len(configs) > 0, "No feeds configured in the PV profile"
 
         # Verify each config has required fields
         for config in configs:
@@ -677,7 +638,7 @@ class TestRssFeedIntegration:
 
         This is a smoke test to verify all feeds are reachable.
         """
-        configs = load_feed_configs()
+        configs = list(PV.feeds)
         assert len(configs) > 0, "No feeds configured"
 
         # Track results for reporting
