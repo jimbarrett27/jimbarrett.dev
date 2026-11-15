@@ -17,6 +17,8 @@ from content_screening.orm_models import ArticleORM
 
 DEFAULT_INBOX_SUBDIR = "literature/inbox"
 UNREAD_SUBDIR = "unread"
+# Kept papers with no open-access PDF, which therefore didn't go to the reMarkable.
+PAYWALLED_SUBDIR = "paywalled"
 SLUG_MAX_LEN = 60
 
 # Obsidian frontmatter `status` per decision.
@@ -56,10 +58,18 @@ def build_stub_markdown(paper: ArticleORM) -> str:
         frontmatter, sort_keys=False, allow_unicode=True, default_flow_style=False
     ).strip()
     reason = paper.llm_reasoning or "(no reason recorded)"
+    paywalled = ""
+    if paper.pdf_unavailable:
+        paywalled = (
+            "> [!note] No open-access PDF\n"
+            "> To read it on the reMarkable, upload the PDF to `reMarkable/Papers/To read` "
+            f"named `{paper.id} - <title>.pdf`.\n\n"
+        )
     return (
         f"---\n{fm}\n---\n\n"
         f"# {paper.title}\n\n"
         f"> **Why this surfaced:** {reason}\n\n"
+        f"{paywalled}"
         f"## Notes\n\n"
         f"<!-- (empty — to be filled when read) -->\n"
     )
@@ -74,7 +84,7 @@ def write_stub(
     creates a fresh file; idempotency (skip if already written) is the caller's
     responsibility via ``ArticleORM.obsidian_path``.
     """
-    inbox = vault_root / inbox_subdir / UNREAD_SUBDIR
+    inbox = vault_root / inbox_subdir / (PAYWALLED_SUBDIR if paper.pdf_unavailable else UNREAD_SUBDIR)
     inbox.mkdir(parents=True, exist_ok=True)
 
     date = _iso_to_date(paper.decided_at) if paper.decided_at else (
@@ -91,3 +101,23 @@ def write_stub(
     path = inbox / filename
     path.write_text(build_stub_markdown(paper), encoding="utf-8")
     return str(path.relative_to(vault_root))
+
+
+def move_to_paywalled(
+    vault_root: Path, rel_path: str, inbox_subdir: str = DEFAULT_INBOX_SUBDIR
+) -> str:
+    """Move a stub we wrote into ``paywalled/``; its new vault-relative path.
+
+    Only a stub still where we put it is moved: if it's gone (you've already moved
+    it yourself), it's left alone and the old path is returned.
+    """
+    src = vault_root / rel_path
+    if not src.exists():
+        return rel_path
+    dest_dir = vault_root / inbox_subdir / PAYWALLED_SUBDIR
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / src.name
+    if dest.exists():
+        return rel_path
+    src.rename(dest)
+    return str(dest.relative_to(vault_root))

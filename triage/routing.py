@@ -1,4 +1,4 @@
-"""Routes triage decisions into external tools (Zotero + Obsidian).
+"""Routes triage decisions into external tools (Zotero, the reMarkable via Drive, Obsidian).
 
 Side effects mutate the paper row in place (``zotero_key``/``zotero_error`` and
 ``obsidian_path``/``obsidian_error``); the caller persists them. Failures are
@@ -11,6 +11,7 @@ from pathlib import Path
 
 from content_screening.orm_models import ArticleORM
 from triage.config import Settings
+from remarkable_drive import outbound
 from triage import obsidian, zotero
 from util.logging_util import setup_logger
 
@@ -21,6 +22,8 @@ logger = setup_logger(__name__)
 # `dismissed` → nothing.
 _ZOTERO_DECISIONS = {"kept", "deep"}
 _OBSIDIAN_DECISIONS = {"kept", "deep", "filed"}
+# Only fresh `kept` decisions go to the tablet; legacy rows predate it.
+_DRIVE_DECISIONS = {"kept"}
 
 # Upper bound on the exponential backoff between retries.
 _RETRY_CAP_SECONDS = 3600
@@ -31,6 +34,9 @@ def route_decision(paper: ArticleORM, settings: Settings) -> None:
     # Zotero first so a fresh `kept` stub can embed the returned item key.
     if paper.status in _ZOTERO_DECISIONS:
         _route_zotero(paper, settings)
+    # Before Obsidian, so a paywalled paper's stub is written straight to paywalled/.
+    if paper.status in _DRIVE_DECISIONS:
+        _route_drive(paper, settings)
     if paper.status in _OBSIDIAN_DECISIONS:
         _route_obsidian(paper, settings)
 
@@ -45,6 +51,12 @@ def is_routing_complete(paper: ArticleORM, settings: Settings) -> bool:
         paper.status in _ZOTERO_DECISIONS
         and settings.zotero_enabled
         and not paper.zotero_key
+    ):
+        return False
+    if (
+        paper.status in _DRIVE_DECISIONS
+        and settings.drive_enabled
+        and not (paper.drive_file_id or paper.pdf_unavailable)
     ):
         return False
     if (
@@ -105,6 +117,36 @@ def _route_zotero(paper: ArticleORM, settings: Settings) -> None:
     except Exception as exc:  # noqa: BLE001 - record any failure on the row
         paper.zotero_error = str(exc)
         logger.error("Zotero push failed for paper %s: %s", paper.id, exc)
+
+
+def _route_drive(paper: ArticleORM, settings: Settings) -> None:
+    if not settings.drive_enabled:
+        logger.info("Drive not enabled; not sending paper %s to the reMarkable", paper.id)
+        return
+    # Idempotency: already uploaded, or already known to have no open-access PDF.
+    if paper.drive_file_id or paper.pdf_unavailable:
+        return
+
+    try:
+        file_id = outbound.send_to_tablet(paper)
+    except Exception as exc:  # noqa: BLE001 - record any failure on the row
+        paper.drive_error = str(exc)
+        logger.error("Sending paper %s to the reMarkable failed: %s", paper.id, exc)
+        return
+
+    paper.drive_error = None
+    if file_id:
+        paper.drive_file_id = file_id
+        logger.info("sent paper %s to the reMarkable: %s", paper.id, file_id)
+        return
+
+    paper.pdf_unavailable = True
+    logger.info("no open-access PDF for paper %s", paper.id)
+    # A stub written on an earlier attempt (while Drive was failing) is in unread/.
+    if paper.obsidian_path and settings.obsidian_vault:
+        paper.obsidian_path = obsidian.move_to_paywalled(
+            Path(settings.obsidian_vault), paper.obsidian_path,
+            settings.obsidian_inbox_subdir)
 
 
 def _route_obsidian(paper: ArticleORM, settings: Settings) -> None:

@@ -29,6 +29,22 @@ main() {
     rsync -a --delete-after --delay-updates \
         "$DEPLOY_DIR/website/dist/triage/browser/" "$TRIAGE_WEB_DIR/"
 
+    # Bring the screening DB schema up to date before anything restarts against it:
+    # the new code's ORM expects the new columns. A no-op when already at head. One
+    # rolling backup, taken only when there is something to apply.
+    (
+        cd "$DEPLOY_DIR/content_screening"
+        export JIMBARRETT_DATA_DIR=/home/jim/data
+        current=$(uv run alembic current 2>/dev/null | awk '{print $1}')
+        head=$(uv run alembic heads 2>/dev/null | awk '{print $1}')
+        if [ "$current" != "$head" ]; then
+            cp "$JIMBARRETT_DATA_DIR/content_screening.db" \
+                "$JIMBARRETT_DATA_DIR/content_screening.db.pre-migration"
+            echo "Migrating content_screening.db: ${current:-none} -> $head"
+            uv run alembic upgrade head
+        fi
+    )
+
     sudo systemctl restart telegram-bot triage-backend
     # The Pokemon agent is a user unit: no sudo. A restart resumes its series from
     # the last kept step. Skipped if it isn't installed.

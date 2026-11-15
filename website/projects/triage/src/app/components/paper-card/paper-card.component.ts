@@ -362,6 +362,15 @@ export class PaperCardComponent {
       }
     };
     add('Zotero', p.status === 'kept' || p.status === 'deep', p.zotero_key, p.zotero_error);
+    // Only once the backend reports Drive routing (older backends don't).
+    if (p.drive_file_id !== undefined) {
+      add(
+        'reMarkable',
+        p.status === 'kept',
+        p.drive_file_id ?? (p.pdf_unavailable ? 'no open-access PDF' : null),
+        p.drive_error ?? null,
+      );
+    }
     add(
       'Obsidian',
       p.status === 'kept' || p.status === 'deep' || p.status === 'filed',

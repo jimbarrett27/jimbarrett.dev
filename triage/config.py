@@ -49,6 +49,12 @@ class Settings:
     # push time, so only this toggle lives here. Off by default (local/dev).
     zotero_enabled: bool = False
 
+    # --- reMarkable (via Drive) ---
+    # Whether kept papers are sent to the tablet: an open-access PDF with a
+    # screening cover page, uploaded to reMarkable/Papers/To read in the photos
+    # account's Drive (token from Secret Manager). Off by default (local/dev).
+    drive_enabled: bool = False
+
     # --- Routing retry loop (step 8) ---
     # A background task re-attempts routing for papers whose Zotero/Obsidian
     # push failed. Off in tests/dev; the systemd service enables it.
@@ -83,6 +89,8 @@ def get_settings() -> Settings:
             "TRIAGE_OBSIDIAN_INBOX_SUBDIR", "literature/inbox"
         ),
         zotero_enabled=os.environ.get("TRIAGE_ZOTERO_ENABLED", "false").lower()
+        in ("1", "true", "yes"),
+        drive_enabled=os.environ.get("TRIAGE_DRIVE_ENABLED", "false").lower()
         in ("1", "true", "yes"),
         routing_retry_enabled=os.environ.get(
             "TRIAGE_ROUTING_RETRY_ENABLED", "true"
