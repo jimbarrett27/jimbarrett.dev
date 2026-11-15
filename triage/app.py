@@ -90,7 +90,7 @@ def create_app() -> FastAPI:
 
     @router.get("/queue", response_model=list[PaperOut])
     def queue(session: Session = Depends(db_session)) -> list[PaperOut]:
-        papers = repository.get_pending_papers(session, settings.min_relevance_score)
+        papers = repository.get_pending_papers(session)
         logger.info("queue requested: %d pending papers", len(papers))
         return [PaperOut.from_orm_article(p) for p in papers]
 

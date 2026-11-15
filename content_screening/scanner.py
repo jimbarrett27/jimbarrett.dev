@@ -60,26 +60,24 @@ def process_new_articles(
             logger.debug(f"Duplicate article skipped: {article.external_id}")
             continue
 
-        is_relevant, score, reasoning, tags, suggested_depth = screen_article(
-            article, profile
-        )
+        result = screen_article(article, profile)
         article.profile = profile.name
         article.screening_model = profile.model
-        article.llm_interest_score = score if is_relevant else 0.0
-        article.llm_reasoning = reasoning
-        article.llm_tags = tags
-        article.suggested_depth = suggested_depth
+        article.llm_interest_score = result.score
+        article.llm_reasoning = result.reasoning
+        article.llm_tags = result.tags
+        article.rubric_answers = result.rubric_answers
 
         # Embed every article (relevant or not) to accumulate feature vectors for
         # a future supervised relevance model — triage decisions are the labels.
         # Best-effort: None on failure, never blocks ingestion.
         article.embedding = compute_article_embedding(article)
 
-        # Always insert (relevant ones enter the triage queue as 'pending'; the
-        # rest are kept for record-keeping with status 'auto_rejected'). Guard
-        # the insert so a single stray duplicate (e.g. a dedup-key miss) can't
-        # abort the whole scan and drop the daily summary message.
-        status = "pending" if is_relevant else "auto_rejected"
+        # Always insert: queued papers enter triage as 'pending', the rest are
+        # kept in full as 'auto_rejected'. Guard the insert so a single stray
+        # duplicate (e.g. a dedup-key miss) can't abort the whole scan.
+        status = result.status
+        is_relevant = status == "pending"
         try:
             article.id = insert_article(article, status=status)
         except IntegrityError:
@@ -146,7 +144,7 @@ def count_pending_triage() -> int:
         return session.scalar(
             select(func.count())
             .select_from(ArticleORM)
-            .where(ArticleORM.status == "pending", ArticleORM.llm_interest_score > 0)
+            .where(ArticleORM.status == "pending")
         ) or 0
 
 

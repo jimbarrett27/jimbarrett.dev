@@ -74,6 +74,10 @@ class Profile:
     openalex: DiscoveryConfig
     rubric: tuple = ()
     threshold: Optional[float] = None
+    # Points added to the rubric score per discovery signal on the paper
+    # (e.g. {"author": 2, "citation": 2}), computed in code, never asked of
+    # the LLM. Keys are ``Article.surfaced_by`` values.
+    signal_bonuses: dict = field(default_factory=dict)
 
 
 class ProfileError(ValueError):
@@ -98,6 +102,13 @@ def _parse_rubric(raw: list, path: Path) -> tuple:
         seen.add(statement.id)
         statements.append(statement)
     return tuple(statements)
+
+
+def _parse_signal_bonuses(raw: Optional[dict], path: Path) -> dict:
+    try:
+        return {str(k): float(v) for k, v in (raw or {}).items()}
+    except (AttributeError, TypeError, ValueError) as e:
+        raise ProfileError(f"{path}: signal_bonuses is malformed: {e}") from e
 
 
 def _parse_openalex(raw: Optional[dict]) -> DiscoveryConfig:
@@ -140,6 +151,7 @@ def load_profile_file(path: Path) -> Profile:
         openalex=_parse_openalex(data.get("openalex")),
         rubric=_parse_rubric(data.get("rubric"), path),
         threshold=float(threshold) if threshold is not None else None,
+        signal_bonuses=_parse_signal_bonuses(data.get("signal_bonuses"), path),
     )
 
 

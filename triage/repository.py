@@ -14,22 +14,19 @@ from content_screening.orm_models import ArticleORM
 from triage.schemas import Decision
 
 
-def get_pending_papers(
-    session: Session, min_relevance_score: float = 0.0
-) -> list[ArticleORM]:
-    """Papers awaiting a triage decision, newest screening first.
+def get_pending_papers(session: Session) -> list[ArticleORM]:
+    """Papers awaiting a triage decision, best score first, ties newest first.
 
-    Only papers the screener found relevant (score strictly above
-    ``min_relevance_score``) are included; the rest are noise kept only for
-    record-keeping by the pipeline.
+    The screener decides intake: only papers it queued have status
+    ``pending``. Rows without a score (none are expected) sort last.
     """
     stmt = (
         select(ArticleORM)
-        .where(
-            ArticleORM.status == "pending",
-            ArticleORM.llm_interest_score > min_relevance_score,
+        .where(ArticleORM.status == "pending")
+        .order_by(
+            ArticleORM.llm_interest_score.desc().nulls_last(),
+            ArticleORM.discovered_at.desc(),
         )
-        .order_by(ArticleORM.discovered_at.desc())
     )
     return list(session.scalars(stmt))
 

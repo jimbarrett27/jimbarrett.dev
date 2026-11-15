@@ -22,17 +22,42 @@ def memory_db():
     db_engine.reset_engine()
 
 
-def _make_orm(external_id: str, status: str, decided_at: str | None = None) -> ArticleORM:
+def _make_orm(
+    external_id: str,
+    status: str,
+    decided_at: str | None = None,
+    score: float | None = None,
+    discovered_at: int | None = None,
+) -> ArticleORM:
     return ArticleORM(
         external_id=external_id,
         source_type="arxiv",
         title=f"Paper {external_id}",
         url=f"https://arxiv.org/abs/{external_id}",
-        discovered_at=int(time.time()),
+        discovered_at=discovered_at or int(time.time()),
         status=status,
+        llm_interest_score=score,
         decided_at=decided_at,
         routing_attempts=0,
     )
+
+
+class TestGetPendingPapers:
+    def test_best_score_first_ties_newest_first_unscored_last(self, memory_db):
+        with db_engine.get_session() as session:
+            session.add(_make_orm("low", "pending", score=-3.0, discovered_at=300))
+            session.add(_make_orm("none", "pending", score=None, discovered_at=400))
+            session.add(_make_orm("high-old", "pending", score=12.5, discovered_at=100))
+            session.add(_make_orm("high-new", "pending", score=12.5, discovered_at=200))
+            session.add(_make_orm("mid", "pending", score=4.0, discovered_at=500))
+            session.add(_make_orm("rejected", "auto_rejected", score=20.0))
+            session.add(_make_orm("archived", "archived", score=1.0))
+
+        with db_engine.get_session() as session:
+            from triage.repository import get_pending_papers
+            ids = [r.external_id for r in get_pending_papers(session)]
+
+        assert ids == ["high-new", "high-old", "mid", "low", "none"]
 
 
 class TestGetDecidedPapers:

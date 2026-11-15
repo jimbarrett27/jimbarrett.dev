@@ -132,6 +132,12 @@ rubric:
         assert profile.rubric[1].required is False
         assert profile.rubric[1].weight == -1.0
 
+    def test_signal_bonuses(self, tmp_path):
+        body = MINIMAL + "signal_bonuses: {author: 2, citation: 1.5}\n"
+        profile = load_profile_file(_write(tmp_path, "demo", body))
+        assert profile.signal_bonuses == {"author": 2.0, "citation": 1.5}
+        assert load_profile_file(_write(tmp_path, "demo", MINIMAL)).signal_bonuses == {}
+
     def test_rubric_ids_must_be_unique(self, tmp_path):
         body = MINIMAL + """
 rubric:

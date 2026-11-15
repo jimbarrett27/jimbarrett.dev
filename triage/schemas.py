@@ -36,7 +36,7 @@ class PaperOut(BaseModel):
     # Discovery signal(s) that surfaced the paper: 'keyword' | 'topic' |
     # 'author' | 'citation' | 'institution'.
     surfaced_by: list[str]
-    # Screener routing hint: 'deep' | 'skim' | 'file'.
+    # PV-era screener hint ('deep' | 'skim' | 'file'); null for new papers.
     suggested_depth: str | None
     status: str
     # Set when a triage decision is made; null while pending.

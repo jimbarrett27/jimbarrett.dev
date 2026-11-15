@@ -247,5 +247,12 @@ rubric:
       little or no data science.
     weight: -2
 
+# Points added in code for how a paper was found (REWORK_PLAN 1.3), on top of
+# the rubric. Citing a seed paper or being by a monitored author is strong
+# evidence the LLM can't see; +2 is worth one "agree" on `transfer`.
+signal_bonuses:
+  citation: 2
+  author: 2
+
 # Set from the seed backfill: the 100th-best seed paper's score (REWORK_PLAN 1.5).
 threshold: null

@@ -1,6 +1,14 @@
+/** PV-era screener hint; no longer written for new papers. */
 export type SuggestedDepth = 'deep' | 'skim' | 'file';
 
-export type TriageStatus = 'pending' | 'kept' | 'dismissed' | 'auto_rejected' | 'deep' | 'filed';
+export type TriageStatus =
+  | 'pending'
+  | 'kept'
+  | 'dismissed'
+  | 'auto_rejected'
+  | 'archived'
+  | 'deep'
+  | 'filed';
 
 /** Mirrors the backend `PaperOut` schema (GET /api/triage/queue). */
 export interface Paper {

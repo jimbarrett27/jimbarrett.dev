@@ -11,11 +11,6 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class Settings:
-    # Only papers the screener scored strictly above this make it into the
-    # triage queue. The screener sets non-relevant papers to 0.0, so the
-    # default of 0.0 selects exactly the "surfaced" papers.
-    min_relevance_score: float = 0.0
-
     # Bind address. In production Caddy on the same host proxies /api here, so
     # binding to localhost is fine.
     host: str = "127.0.0.1"
@@ -66,9 +61,6 @@ def _csv(value: str) -> tuple[str, ...]:
 def get_settings() -> Settings:
     """Build settings from environment variables (with sensible defaults)."""
     return Settings(
-        min_relevance_score=float(
-            os.environ.get("TRIAGE_MIN_RELEVANCE_SCORE", "0.0")
-        ),
         host=os.environ.get("TRIAGE_HOST", "127.0.0.1"),
         port=int(os.environ.get("TRIAGE_PORT", "8077")),
         undo_window_seconds=int(os.environ.get("TRIAGE_UNDO_WINDOW_SECONDS", "30")),
