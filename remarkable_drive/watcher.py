@@ -1,9 +1,10 @@
 """Polls the reMarkable's export folders in Drive and dispatches each file by folder.
 
     reMarkable/
-      Notes/      → remarkable_drive.notebooks (handwritten notes pipeline)
-      Done/       ← processed files are moved here
-      Failed/     ← files given up on, or that can't be handled; move one back to retry
+      Notes/              → remarkable_drive.notebooks (handwritten notes pipeline)
+      Papers/Annotated/   → remarkable_drive.reading (annotations → the paper's stub)
+      Done/               ← processed files are moved here
+      Failed/             ← files given up on, or that can't be handled; move one back to retry
 
 A file stays where it is until its handler has finished with it, so a crash or a
 restart just means it's picked up again on the next poll. Retries are counted in
@@ -64,8 +65,9 @@ Handler = Callable[[object, int, DriveFile, bytes], Awaitable[Outcome]]
 
 def _handlers() -> dict[str, Handler]:
     # Imported here: the handlers import this module for DriveFile/Outcome.
-    from remarkable_drive import notebooks
-    return {f"{ROOT}/Notes": notebooks.handle}
+    from remarkable_drive import notebooks, reading
+    return {f"{ROOT}/Notes": notebooks.handle,
+            f"{ROOT}/Papers/Annotated": reading.handle}
 
 
 _folder_ids: dict[str, str] = {}

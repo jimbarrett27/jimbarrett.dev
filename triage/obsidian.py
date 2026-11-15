@@ -45,6 +45,8 @@ def build_stub_markdown(paper: ArticleORM) -> str:
     """Render the full markdown (frontmatter + body) for a paper's stub."""
     frontmatter = {
         "title": paper.title,
+        # How the reMarkable pipeline finds the stub after you've moved it.
+        "triage_id": paper.id,
         "authors": list(paper.authors or []),
         "source": paper.source_type,
         "url": paper.url,
