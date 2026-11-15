@@ -33,7 +33,6 @@ dependencies = [
     "chess>=1.11.2",
     "pyboy==2.7.0",
     "google-api-python-client>=2.202.0",
-    "google-auth-oauthlib>=1.5.0",
 ]
 
 [project.optional-dependencies]

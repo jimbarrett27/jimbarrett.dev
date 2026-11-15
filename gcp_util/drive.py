@@ -3,12 +3,25 @@
 The tablet's Drive integration uses the same account, so a folder here is what the
 reMarkable sees. Credentials are an OAuth refresh token (an "authorized user" JSON:
 client id, client secret, refresh token) kept in Secret Manager as
-``DRIVE_OAUTH_TOKEN``; :mod:`gcp_util.drive_auth` creates it. App passwords don't
-work for the Drive API, hence OAuth.
+``DRIVE_OAUTH_TOKEN``. App passwords don't work for the Drive API, hence OAuth.
 
 The token carries the full ``drive`` scope so the server can read files it didn't
 create (papers added by hand, exports written by the tablet), not just its own.
 Callers keep to the folders they're meant for.
+
+Regenerating the token (only if it's revoked, or unused for ~6 months):
+
+1. In GCP project ``personal-website-318015`` → Google Auth Platform → Clients,
+   download the "home-server-drive" Desktop client JSON. The app must be
+   "In production" (Audience), or the token expires after 7 days.
+2. Run google-auth-oauthlib's ``InstalledAppFlow.from_client_secrets_file(path,
+   SCOPES).run_local_server(open_browser=False, access_type="offline",
+   prompt="consent")``. ``prompt="consent"`` is what guarantees a refresh token.
+   Sign in as the photos account. On a headless server, the browser's redirect to
+   ``localhost:<port>`` fails on the laptop; paste that URL into ``curl`` on the
+   server to complete the flow.
+3. Add ``creds.to_json()`` as a new version of the ``DRIVE_OAUTH_TOKEN`` secret,
+   then delete the client JSON.
 """
 
 import io
