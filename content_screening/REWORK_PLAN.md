@@ -1,6 +1,7 @@
 # Literature monitoring rework + reMarkable reading loop — plan
 
-Status: **planning, 2026-11-14.** Two related pieces of work:
+Status: **planned, decisions settled 2026-11-15** (grilled; see section 5). Two
+related pieces of work:
 
 1. **Rework literature monitoring** for a new field (financial crime / fraud prevention,
    GenAI data science) with much lower volume, a rubric-based score, and the PV era
@@ -72,13 +73,12 @@ openalex:                   # replaces data/discovery.yaml
   seed_papers: [...]
   institutions: [...]
 rubric: [...]               # see 1.3
-intake:                     # see 1.5
-  threshold: ...
-  daily_cap: 10
+model: deepseek/deepseek-v4.1-flash   # screening model, per profile
+threshold: ...              # see 1.5
 ```
 
-- The active profile is selected by config/env (default: the newest one). Only one
-  profile is active at a time.
+- The active profile is selected by an env var. Only one profile is active at a
+  time.
 - `screen_article.jinja2` becomes generic and is filled in from the profile.
 - The existing PV settings become `profiles/pv.yaml`. That documents what the PV
   era used and keeps a way back.
@@ -98,7 +98,11 @@ cuts cost as well as queue size.
 
 LLMs are poor at producing calibrated scores directly. Instead:
 
-- The profile defines **6–10 statements**, each with a weight. Examples:
+- The profile defines **6–10 statements**, each with a weight and an optional
+  `required: true`. A required statement answered **strongly disagree** rejects the
+  paper whatever the other answers; "can't tell" does not. **For fincrime, "about
+  fraud / AML / financial crime" starts as required** to keep early volume down.
+  Loosen it later by changing the flag. Examples:
   - "The paper is about fraud, AML or financial crime" (+)
   - "Generative AI / LLMs are central to the method" (+)
   - "It proposes a new method rather than applying an existing one" (+)
@@ -130,27 +134,36 @@ One Alembic migration:
   row gets the active profile's name. Training can then filter by profile or use it
   as a feature, so the two fields aren't mixed by accident.
 - Add `articles.rubric_answers` (JSON, nullable; null for PV rows).
+- Add `articles.screening_model` (text; backfill the deepseek model name on PV rows),
+  so a later model evaluation can tell models apart.
 - Move the 2,348 PV `pending` rows to **`archived`**. The 462 `kept`/`dismissed`
   decisions and all embeddings stay as they are.
 
-### 1.5 Intake control (no expiry)
+### 1.5 Intake: a ranked queue (no cap, no expiry)
 
-Every paper that enters `pending` stays there until it is triaged. **There is no
-automatic expiry.** Volume is kept down at intake:
+- Papers scoring at or above the profile's `threshold` (and passing any required
+  rubric statement) become `pending`. Everything else is `auto_rejected`, kept in
+  full: embedding, rubric answers, reasoning, metadata.
+- **The queue is sorted by score, best first**, ties broken by newest. Today it is
+  newest first (`triage/repository.py`), so this is a backend change plus showing
+  the score on the card.
+- **No daily cap, no expiry.** Volume is controlled only by narrower discovery
+  (1.2) and the threshold. If the queue builds up, clear the bottom by hand.
+- Papers dropped *before* screening (no keyword or topic match) are still not
+  stored. That's unchanged.
 
-1. **Narrower discovery** (1.2).
-2. **Score threshold + daily cap:** after a scan, relevant papers are ranked by
-   score. Only those above `intake.threshold` and within the top `intake.daily_cap`
-   become `pending`.
-3. Papers that pass screening but miss the cut get **`below_cut`**. They are kept
-   with their answers and embeddings, out of the queue, and could be promoted later.
+**Initial threshold and seed:**
 
-If the queue still builds up, clear it by hand or add a bulk-archive action
-later. Not built now.
+1. **Seed backfill:** screen backwards from today in monthly chunks until about
+   1,000 papers have been screened (12-month maximum). The **top 100 by score**
+   go to `pending` at once, with no threshold. The rest are `auto_rejected` as
+   usual.
+2. **Provisional threshold** = the 100th seed paper's score.
+3. The daily fincrime scan stays **off until the seed is in**.
+4. **Re-fit the threshold** once the seed batch is triaged.
 
-The triage UI only shows `pending`, so the new statuses (`archived`, `below_cut`)
-need no frontend change beyond defensive handling of unknown statuses.
-`count_pending_triage` is unchanged.
+The new `archived` status needs no frontend change beyond defensive handling of
+unknown statuses.
 
 ### 1.6 Cleanup
 
@@ -160,11 +173,29 @@ need no frontend change beyond defensive handling of unknown statuses.
   `TRIAGE_REQUIRE_CF_ACCESS`). Caddy only serves the tailnet now, and the setting
   is already `false`.
 
+### 1.6b Richer Obsidian stubs (findability)
+
+Obsidian becomes the main place to find a paper again. Zotero stays, for
+citations only (unchanged, metadata-only items).
+
+- Stub frontmatter gains `triage_id` (the article ID), `venue`, `published`,
+  `profile`, `score`, and rubric-derived tags. The body gains the abstract and a
+  short rubric summary.
+- **Stubs are found by `triage_id`, never by stored path**, because you move them
+  by hand between `Papers/unread/`, `read/` and `paywalled/` (vault subdir is
+  `Papers`, per `triage.env`). `obsidian_path` becomes a hint only.
+- Pipelines move stubs themselves: to `read/` when annotations arrive, and to
+  `paywalled/` when a kept paper has no open-access PDF.
+- One-off backfill: add `triage_id` to the existing ~30 stubs, matched by URL or
+  title.
+
 ### 1.7 Later, not now
 
-A small supervised ranker on embeddings + rubric answers, trained on `fincrime`
-decisions (and maybe PV decisions as a weak prior). Worth revisiting once there are
-a few hundred new-field decisions.
+- A small supervised ranker on embeddings + rubric answers, trained on `fincrime`
+  decisions (and maybe PV decisions as a weak prior). Worth revisiting once there
+  are a few hundred new-field decisions.
+- **A newer or better cheap screening model**, chosen by a small evaluation once
+  the pipeline is built (the triaged seed batch is the obvious eval set).
 
 ---
 
@@ -238,13 +269,22 @@ A new routing target alongside Zotero and Obsidian in `triage/routing.py`
   - OpenAlex / RSS: `best_oa_location.pdf_url`. Store it in `metadata` at
     ingest from now on. For older rows, look it up from OpenAlex by DOI when the
     paper is kept.
+- **Every kept paper** is sent, as soon as it is kept.
+- **Prepend a cover page** (PyMuPDF, A4) so you can see at a glance why the paper
+  is there. It is also the document thumbnail in the tablet's file browser:
+  - Top half, legible as a thumbnail: title, score, one-line verdict.
+  - Below: the rubric table (statement, answer, one-line justification), why it
+    surfaced, venue, date, and the abstract if there's room.
+  - A fixed marker string in its text layer, so the annotation pipeline can
+    recognise it.
 - **Upload** to `reMarkable/Papers/To read/` as `<article id> - <short title>.pdf`.
   The leading ID is how an export is matched back to its paper.
-- Keep **the uploaded original** locally (e.g.
-  `data_path("papers/<id>.pdf")`). The annotation pipeline compares against it.
-- **No open-access PDF** (paywalled): record it on the row and say so in the
-  Obsidian stub ("no open-access PDF; add one by hand"). If you upload a PDF to the
-  folder by hand with the `<id> - ` prefix, the return path works the same.
+- Keep **the uploaded file** (cover page included) locally, e.g.
+  `data_path("papers/<id>.pdf")`. The annotation pipeline compares against it.
+- **No open-access PDF** (paywalled): record it on the row and move the stub to
+  `Papers/paywalled/`, noting the expected filename prefix. Stays manual: if you
+  upload a PDF named `<id> - ….pdf` yourself, the return trip works as usual, just
+  without a cover page. Automate only if paywalled papers turn out to be common.
 - New columns: `drive_file_id`, `drive_error` (same pattern as `zotero_key` /
   `zotero_error`).
 
@@ -254,7 +294,9 @@ Input: an exported PDF. Match it to its paper by the leading ID in the filename,
 then load the original from local storage.
 
 1. **Map pages.** Match each exported page to an original page by text-layer
-   equality. Pages with no text layer are **inserted pages**.
+   equality. Pages with no text layer are **inserted pages**. The page with the
+   cover marker is the **cover page**: handwriting there has no anchor and goes to
+   the top of the notes as general remarks.
 2. **Separate the ink.** On each matched page, the drawings beyond the original
    page's drawing count are annotations. Exact, no image work.
 3. **Classify strokes.** By colour: highlight vs pen. Highlights get their colour
@@ -274,7 +316,8 @@ then load the original from local storage.
    if quality holds; otherwise one small call per group.
 7. **Inserted pages** → the notebook pipeline (2.5), with the output put into the
    same paper note under a "Notes pages" heading.
-8. **Write to Obsidian** under the stub's `## Notes`, in page order:
+8. **Write to Obsidian** under the stub's `## Notes` (stub found by `triage_id`,
+   see 1.6b), cover-page remarks first, then in page order:
 
    ```markdown
    **p.4**
@@ -283,9 +326,12 @@ then load the original from local storage.
    ```
 
    Highlights are quotes with no comment. The crop image can be embedded as a
-   fallback for checking. Frontmatter `status: unread` → `read`.
-   Re-exporting the same paper **replaces** the generated section. It doesn't
-   append a second copy.
+   fallback for checking. Frontmatter `status: unread` → `read`, and the stub
+   moves to `Papers/read/`.
+   The generated notes sit between `<!-- remarkable:start -->` and
+   `<!-- remarkable:end -->`, with a comment inside saying edits there will be
+   overwritten. **A re-export replaces only what's between the markers**; anything
+   you write outside them is never touched.
 
 Test fixture: the 2026-11-14 export (`/home/jim/data/remarkable_test/drive2/export3.pdf`
 vs `original/…pdf`) has a circled passage + "CREMLS?" (p2), a symbol (p3),
@@ -301,8 +347,8 @@ Copy a trimmed version into `tests/` for unit tests of steps 1–5.
   blank pages.
 - Everything after that is unchanged: transcript, figure redraws, vault note,
   routing buttons in Telegram.
-- Keep the email ingest (`handwritten_notes/remarkable.py`) as a fallback until
-  Drive has run reliably for a while, then remove it. That also removes the
+- Keep the email ingest (`handwritten_notes/remarkable.py`) as a fallback for about
+  a month of reliable Drive use, then remove it. That also removes the
   email-spoofing checks, which Drive doesn't need: only your account can write
   there.
 - Possible later addition: subfolders of `Notes/` as routing targets (e.g.
@@ -312,28 +358,70 @@ Copy a trimmed version into `tests/` for unit tests of steps 1–5.
 
 ## 3. Order of work
 
-1. **Merge PR #238** (Drive helper).
-2. **Migration + profile plumbing** (1.4, 1.1 with `profiles/pv.yaml`), plus cleanup
-   (1.6). No behaviour change yet.
-3. **Rubric scoring + intake control** (1.3, 1.5), tested against the `pv` profile
-   on a replay of recent papers.
-4. **Fincrime profile** (1.2) once the source research is in. Switch it on.
-5. **Drive watcher + notebook pipeline** (2.2, 2.5). This is the smallest end-to-end
-   win and proves the watcher.
-6. **Outbound upload** (2.3).
-7. **Annotation pipeline** (2.4).
+Only the **content** of the fincrime profile (1.2, rubric statements and weights)
+waits on the source research. Everything else can be built and tested against
+`profiles/pv.yaml` and the 2026-11-14 test exports.
 
-Steps 2–4 and 5–7 are independent tracks; they share only the Obsidian stub.
+**Literature track**
+
+1. **Migration + profile plumbing + cleanup** (1.1, 1.4, 1.6): `profile`,
+   `rubric_answers`, `screening_model` columns, PV backfill, PV pending → `archived`,
+   `profiles/pv.yaml` reproducing today's behaviour exactly. No behaviour change.
+2. **Rubric scoring + ranked queue** (1.3, 1.5): rubric machinery, scoring in code,
+   required statements, threshold; queue sorted by score. Developed against a draft
+   PV rubric. A replay of a sample of papers is a paid LLM run: ask first.
+3. **Richer stubs + `triage_id` backfill** (1.6b).
+4. **Fincrime profile** (1.2): **blocked on the source research.** Then the seed
+   backfill, provisional threshold, daily scan on.
+
+**reMarkable track** (merge PR #238 first)
+
+5. **Drive watcher + notebooks over Drive** (2.2, 2.5). The smallest end-to-end win,
+   and it proves the watcher.
+6. **Outbound upload + cover page** (2.3).
+7. **Annotation pipeline** (2.4), using the test exports as fixtures.
+
+The two tracks are independent apart from the stub format (step 3), which steps 6
+and 7 build on.
 
 ## 4. Open questions
 
-- The rubric statements and weights for fincrime (draft with the source research).
-- `intake.daily_cap` and `threshold`: start at 10/day and a threshold picked from
-  the score distribution of a replay.
-- Do highlight colours mean anything to you (e.g. pink = key result, orange =
-  disagree)? If so, the pipeline can label them.
-- A personal marking scheme (`?` = open question, star = key point) that the
-  pipeline turns into a `## Questions` list or tags? Only worth it if you'd use it
-  consistently.
+- **Rubric statements, weights, keywords, feeds, topics** for fincrime: drafted with
+  the source research.
+- **Screening model**: stay on deepseek flash for now; evaluate a newer cheap model
+  once the pipeline is built.
+- **Highlight colours** are recorded but have no meaning yet, and there is no
+  **personal marking scheme**. Revisit after reading a few papers.
+- **Automatic handling of paywalled PDFs**: only if they turn out to be common.
 - Cost: annotation transcription is a handful of small Sonnet 5.5 calls per paper
-  read, which seems fine, but worth checking after the first few papers.
+  read. Check after the first few papers.
+
+## 5. Decisions (grilled 2026-11-15)
+
+1. Intake is a **ranked queue**: above threshold → `pending`, sorted by score (ties
+   newest first). No cap, no pool, no expiry; clear out by hand.
+2. **Provisional threshold** = the 100th seed paper's score; re-fit after the seed is
+   triaged. Daily fincrime scan off until the seed is in.
+3. **Seed** = top 100 by score from a backfill of about 1,000 screened papers
+   (≤12 months), skipping the threshold.
+4. The "about fraud / AML / financial crime" statement is **required** for now
+   (strongly disagree rejects; "can't tell" passes). It's a per-statement flag, so
+   it can be loosened later.
+5. **Every kept paper goes to Drive**, as soon as it is kept, with retries.
+6. A **cover page** at the front of each PDF: thumbnail-legible summary, then the
+   rubric detail.
+7. **Writing on the cover page** goes to the top of `## Notes` as general remarks.
+8. **Stubs are found by `triage_id` frontmatter** and moved by the pipelines (`read/`,
+   `paywalled/`).
+9. **Richer stubs**, so Obsidian is the main place to search; Zotero kept for
+   citations only.
+10. Generated notes sit **between `remarkable:start/end` markers**; a re-export
+    replaces only those.
+11. **Paywalled papers stay manual**; a PDF uploaded with the `<id> - ` prefix works
+    on the way back.
+
+Assumptions: `screening_model` column and per-profile `model`; watcher in the bot
+process, polling every 2 min; active profile by env var; the local original is the
+uploaded file (cover included); email notebook ingest removed after about a month
+of Drive; unmatched `Annotated/` exports stay put and the bot messages you;
+pre-screening drops stay unstored.
