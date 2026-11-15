@@ -3,6 +3,7 @@
 import time
 from datetime import datetime, timezone
 
+import pytest
 import yaml
 
 from content_screening.orm_models import ArticleORM
@@ -114,3 +115,71 @@ def test_unconfigured_vault_is_a_noop():
     routing.route_decision(paper, settings)
     assert paper.obsidian_path is None
     assert paper.obsidian_error is None
+
+
+# --- Richer stubs (REWORK_PLAN 1.6b) -------------------------------------------
+
+
+def _fincrime_paper(**overrides) -> ArticleORM:
+    return make_paper(**{
+        "id": 42,
+        "source_type": "openalex",
+        "abstract": "  We detect money mules.  ",
+        "metadata_": {"venue": "Decision Support Systems", "publication_date": "2026-10-02"},
+        "profile": "fincrime",
+        "llm_interest_score": 12.5,
+        "llm_reasoning": "A mule-detection paper.",
+        "rubric_answers": {
+            "fincrime": {"answer": "strongly_agree", "justification": "Mules."},
+            "genai": {"answer": "disagree", "justification": "A GNN."},
+            "survey": {"answer": "agree", "justification": ""},
+            "broken": "not a dict",
+        },
+        **overrides,
+    })
+
+
+def test_stub_frontmatter_for_finding_the_paper_again():
+    fm = parse_frontmatter(obsidian.build_stub_markdown(_fincrime_paper()))
+    assert fm["triage_id"] == 42
+    assert fm["venue"] == "Decision Support Systems"
+    assert fm["published"] == "2026-10-02"
+    assert fm["profile"] == "fincrime"
+    assert fm["score"] == 12.5
+    # Agreed statements become tags, whatever their weight's sign.
+    assert fm["tags"] == ["paper", "triage/kept", "rubric/fincrime", "rubric/survey"]
+    assert list(fm)[:2] == ["title", "triage_id"]
+
+
+def test_stub_body_has_abstract_and_rubric_before_notes():
+    text = obsidian.build_stub_markdown(_fincrime_paper())
+    assert "## Abstract\n\nWe detect money mules.\n\n" in text
+    assert "Score 12.5 (fincrime profile)." in text
+    assert "- `fincrime`: strongly agree. Mules." in text
+    assert "- `genai`: disagree. A GNN." in text
+    assert "- `survey`: agree\n" in text
+    assert "broken" not in text
+    # The annotation pipeline writes under ## Notes, so it stays last.
+    assert text.index("## Abstract") < text.index("## Screening") < text.index("## Notes")
+
+
+def test_pv_era_stub_has_no_rubric_section_but_keeps_its_score():
+    paper = make_paper(abstract=None, metadata_=None, profile="pv")
+    text = obsidian.build_stub_markdown(paper)
+    fm = parse_frontmatter(text)
+    assert (fm["venue"], fm["published"], fm["score"]) == (None, None, 0.6)
+    assert fm["tags"] == ["paper", "triage/kept"]
+    assert "## Abstract" not in text
+    assert "Score 0.6 (pv profile)." in text
+    assert "- `" not in text
+
+
+@pytest.mark.parametrize("metadata,expected", [
+    ({"publication_date": "2026-10-02"}, "2026-10-02"),
+    ({"published": "Fri, 13 Nov 2026 17:07:39 -0800"}, "2026-11-13"),
+    ({"published": "2026-11-15"}, "2026-11-15"),
+    ({"published": "sometime"}, None),
+    ({}, None),
+])
+def test_published_date(metadata, expected):
+    assert obsidian.published_date(metadata) == expected
