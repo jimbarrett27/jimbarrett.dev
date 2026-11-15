@@ -1,0 +1,45 @@
+{{ description }}
+
+## Your task
+
+Judge the paper below against each statement. For every statement, first write
+a one-line justification grounded in the title and abstract, then give your
+answer as exactly one of:
+
+- `strongly_disagree`
+- `disagree`
+- `neutral`
+- `agree`
+- `strongly_agree`
+- `cant_tell`: the title and abstract don't say enough to judge. Use this
+  rather than guessing, especially when there is no abstract.
+
+Judge each statement on its own; don't let one answer pull the others.
+
+## Statements
+{% for s in statements %}
+- `{{ s.id }}`: {{ s.statement }}
+{%- endfor %}
+
+## The paper
+
+Title: {{ title }}
+{% if abstract %}
+Abstract:
+{{ abstract }}
+{% else %}
+(No abstract available: judge from the title alone.)
+{% endif %}
+
+## Response
+
+Respond with ONLY a JSON object (no markdown, no text outside the JSON):
+{
+    "answers": {
+{%- for s in statements %}
+        "{{ s.id }}": {"justification": "...", "answer": "..."}{{ "," if not loop.last }}
+{%- endfor %}
+    },
+    "summary": "One sentence for the reader: what the paper does and why it is or isn't worth their time",
+    "tags": ["a few short topic tags, e.g. graph-learning, llm-agents, aml, alert-triage"]
+}

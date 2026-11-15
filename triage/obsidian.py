@@ -1,15 +1,21 @@
 """Writes Obsidian stub notes for triaged papers.
 
 A ``kept`` (or legacy ``deep``/``filed``) decision produces a markdown stub in
-``<vault>/literature/inbox/unread/<YYYY-MM-DD>-<slug>.md`` with frontmatter the
-rest of the vault can query, and the relevance reason as the body. Obsidian
-remains the editor — these are just filed stubs. The sibling ``read/`` subfolder
-is populated manually by the user; the app never writes or reads it.
+``<vault>/<inbox>/unread/<YYYY-MM-DD>-<slug>.md``. Obsidian is where a paper is
+found again (REWORK_PLAN 1.6b), so the stub carries what's needed to search and
+filter on: frontmatter with the venue, publication date, profile, score and
+rubric tags, and a body with the screening summary, the abstract and the rubric
+answers. Obsidian remains the editor; ``## Notes`` is left for you (and the
+reMarkable annotation pipeline).
+
+``triage_id`` is how a stub is found again after you've moved it by hand.
 """
 
 import re
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
+from typing import Optional
 
 import yaml
 
@@ -41,8 +47,67 @@ def _iso_to_date(iso: str) -> str:
     return datetime.fromisoformat(iso).date().isoformat()
 
 
+def published_date(metadata: dict) -> Optional[str]:
+    """Publication date as YYYY-MM-DD: OpenAlex's ``publication_date`` or an RSS
+    ``published`` (ISO or RFC 822). None if absent or unparseable."""
+    for raw in (metadata.get("publication_date"), metadata.get("published")):
+        if not raw:
+            continue
+        raw = str(raw).strip()
+        try:
+            return datetime.fromisoformat(raw[:10]).date().isoformat()
+        except ValueError:
+            pass
+        try:
+            return parsedate_to_datetime(raw).date().isoformat()
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+_AGREEING = {"agree", "strongly_agree"}
+
+_ANSWER_LABELS = {
+    "strongly_agree": "strongly agree", "agree": "agree", "neutral": "neutral",
+    "disagree": "disagree", "strongly_disagree": "strongly disagree",
+    "cant_tell": "can't tell",
+}
+
+
+def _rubric_items(paper: ArticleORM) -> list[tuple[str, dict]]:
+    """(statement id, answer) pairs from ``rubric_answers``, malformed ones dropped."""
+    answers = paper.rubric_answers
+    if not isinstance(answers, dict):
+        return []
+    return [
+        (sid, a) for sid, a in answers.items()
+        if isinstance(a, dict) and a.get("answer")
+    ]
+
+
+def rubric_tags(paper: ArticleORM) -> list[str]:
+    """``rubric/<id>`` for every statement the screener agreed with."""
+    return [f"rubric/{sid}" for sid, a in _rubric_items(paper) if a["answer"] in _AGREEING]
+
+
+def _screening_section(paper: ArticleORM) -> str:
+    items = _rubric_items(paper)
+    if paper.llm_interest_score is None and not items:
+        return ""
+    lines = ["## Screening", ""]
+    if paper.llm_interest_score is not None:
+        profile = f" ({paper.profile} profile)" if paper.profile else ""
+        lines += [f"Score {paper.llm_interest_score:g}{profile}.", ""]
+    for sid, a in items:
+        label = _ANSWER_LABELS.get(a["answer"], a["answer"])
+        justification = str(a.get("justification") or "").strip()
+        lines.append(f"- `{sid}`: {label}" + (f". {justification}" if justification else ""))
+    return "\n".join(lines).rstrip() + "\n\n"
+
+
 def build_stub_markdown(paper: ArticleORM) -> str:
     """Render the full markdown (frontmatter + body) for a paper's stub."""
+    metadata = paper.metadata_ or {}
     frontmatter = {
         "title": paper.title,
         # How the reMarkable pipeline finds the stub after you've moved it.
@@ -50,11 +115,18 @@ def build_stub_markdown(paper: ArticleORM) -> str:
         "authors": list(paper.authors or []),
         "source": paper.source_type,
         "url": paper.url,
+        "venue": metadata.get("venue"),
+        "published": published_date(metadata),
         "discovered": _epoch_to_date(paper.discovered_at),
         "triaged": _iso_to_date(paper.decided_at) if paper.decided_at else None,
         "status": _STATUS_BY_DECISION.get(paper.status, paper.status),
+        "profile": paper.profile,
+        "score": (
+            round(paper.llm_interest_score, 2)
+            if paper.llm_interest_score is not None else None
+        ),
         "zotero": paper.zotero_key or "",
-        "tags": ["paper", f"triage/{paper.status}"],
+        "tags": ["paper", f"triage/{paper.status}", *rubric_tags(paper)],
     }
     fm = yaml.safe_dump(
         frontmatter, sort_keys=False, allow_unicode=True, default_flow_style=False
@@ -67,11 +139,14 @@ def build_stub_markdown(paper: ArticleORM) -> str:
             "> To read it on the reMarkable, upload the PDF to `reMarkable/Papers/To read` "
             f"named `{paper.id} - <title>.pdf`.\n\n"
         )
+    abstract = f"## Abstract\n\n{paper.abstract.strip()}\n\n" if paper.abstract else ""
     return (
         f"---\n{fm}\n---\n\n"
         f"# {paper.title}\n\n"
         f"> **Why this surfaced:** {reason}\n\n"
         f"{paywalled}"
+        f"{abstract}"
+        f"{_screening_section(paper)}"
         f"## Notes\n\n"
         f"<!-- (empty — to be filled when read) -->\n"
     )

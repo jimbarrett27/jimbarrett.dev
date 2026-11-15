@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 import pytest
 
-from content_screening.constants import INTERESTING_ARXIV_CATEGORIES
 from content_screening.models import Article, SourceType
 from content_screening.arxiv_feed import (
     _clean_summary,
@@ -18,6 +17,9 @@ from content_screening.arxiv_feed import (
     get_arxiv_rss_url,
     make_arxiv_url,
 )
+from content_screening.profile import load_profile
+
+PV = load_profile("pv")
 
 
 class TestUrlGeneration:
@@ -106,7 +108,7 @@ class TestFindMatchingKeywords:
     def test_finds_matching_keywords(self):
         """Test finding keywords in text."""
         text = "This study examines adverse drug reactions in patients."
-        result = _find_matching_keywords(text)
+        result = _find_matching_keywords(text, PV.keywords)
         assert "adverse" in result
         assert "drug" in result
         assert "reaction" in result
@@ -114,14 +116,14 @@ class TestFindMatchingKeywords:
     def test_case_insensitive(self):
         """Test case-insensitive matching."""
         text = "DRUG ADVERSE REACTION"
-        result = _find_matching_keywords(text)
+        result = _find_matching_keywords(text, PV.keywords)
         assert "drug" in result
         assert "adverse" in result
 
     def test_partial_matching(self):
         """Test partial keyword matching."""
         text = "Medical pharmaceutical duplication study"
-        result = _find_matching_keywords(text)
+        result = _find_matching_keywords(text, PV.keywords)
         assert "medic" in result
         assert "pharma" in result
         assert "duplic" in result
@@ -129,7 +131,7 @@ class TestFindMatchingKeywords:
     def test_no_matches(self):
         """Test when no keywords match."""
         text = "This article is about machine learning algorithms."
-        result = _find_matching_keywords(text)
+        result = _find_matching_keywords(text, PV.keywords)
         assert result == []
 
 
@@ -372,11 +374,9 @@ class TestFetchArxivPapers:
         assert ids == {"2401.11111", "2401.22222"}
 
     def test_uses_default_categories(self):
-        """Test that default categories are used when none specified."""
-        # Just verify the default is set correctly
-        assert len(INTERESTING_ARXIV_CATEGORIES) > 0
-        assert "cs.AI" in INTERESTING_ARXIV_CATEGORIES
-        assert "cs.LG" in INTERESTING_ARXIV_CATEGORIES
+        """The active (PV) profile supplies the categories when none are given."""
+        assert "cs.AI" in PV.arxiv_categories
+        assert "cs.LG" in PV.arxiv_categories
 
     @patch("content_screening.arxiv_feed.feedparser.parse")
     def test_empty_category_returns_empty(self, mock_parse):
@@ -447,14 +447,14 @@ class TestArxivFeedIntegration:
     def test_fetch_from_all_configured_categories(self):
         """Test fetching from all configured ArXiv categories."""
         articles = fetch_arxiv_papers(
-            categories=INTERESTING_ARXIV_CATEGORIES,
+            categories=PV.arxiv_categories,
             filter_by_keywords=False
         )
 
         print(f"\n{'='*60}")
         print("ArXiv Feed Integration Test Results")
         print(f"{'='*60}")
-        print(f"Categories tested: {len(INTERESTING_ARXIV_CATEGORIES)}")
+        print(f"Categories tested: {len(PV.arxiv_categories)}")
         print(f"Total papers fetched: {len(articles)}")
 
         # Group by category

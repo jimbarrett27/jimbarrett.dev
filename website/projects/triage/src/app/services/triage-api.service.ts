@@ -15,7 +15,7 @@ export class TriageApiService {
   private http = inject(HttpClient);
   private readonly base = '/api/triage';
 
-  /** Pending papers awaiting a triage decision, newest screening first. */
+  /** Pending papers awaiting a triage decision, best score first. */
   getQueue(): Observable<Paper[]> {
     return this.http.get<Paper[]>(`${this.base}/queue`);
   }

@@ -109,19 +109,24 @@ def test_fetch_pdf_server_error_raises(monkeypatch):
 def test_cover_page_contents():
     paper = make_paper(id=77, metadata_={"venue": "JMIR AI", "publication_date": "2026-01-14"},
                        surfaced_by=["topic"])
-    paper.rubric_answers = [{"statement": "About fraud", "answer": 2, "justification": "AML."}]
+    paper.profile = "fincrime"
+    paper.rubric_answers = {
+        "fincrime": {"answer": "strongly_agree", "justification": "AML."},
+        "gone": {"answer": "cant_tell", "justification": "Since removed from the rubric."},
+    }
     with fitz.open(stream=outbound.build_cover(paper), filetype="pdf") as doc:
         assert doc.page_count == 1
         assert doc[0].rect == outbound.A4
         text = " ".join(doc[0].get_text().split())
     for expected in (paper.title, "Score 0.60", paper.llm_reasoning, "JMIR AI · 2026-01-14",
-                     "About fraud", "strongly agree", "AML.", f"{outbound.COVER_MARKER} · paper 77"):
+                     "The paper is about fraud", "strongly agree", "AML.",
+                     "gone", "can't tell", f"{outbound.COVER_MARKER} · paper 77"):
         assert expected in text
 
 
 def test_cover_ignores_malformed_rubric():
     paper = make_paper()
-    paper.rubric_answers = {"not": "a list"}
+    paper.rubric_answers = {"not": "an answer", "also": {"justification": "no answer"}}
     with fitz.open(stream=outbound.build_cover(paper), filetype="pdf") as doc:
         assert "Rubric" not in doc[0].get_text()
 

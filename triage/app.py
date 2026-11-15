@@ -2,17 +2,14 @@
 
 In production the backend binds localhost and Caddy proxies ``/api`` to it on
 ``triage.home.jimbarrett.dev``, which is served only to Tailscale addresses; that
-is the access control. The optional ``TRIAGE_REQUIRE_CF_ACCESS`` guard, left over
-from the earlier Cloudflare Tunnel + Access setup, checks the
-``Cf-Access-Authenticated-User-Email`` header on every ``/api/triage`` request
-when enabled. ``/healthz`` is intentionally left open for health probes.
+is the access control.
 """
 
 import asyncio
 import contextlib
-from typing import AsyncIterator, Iterator, Optional
+from typing import AsyncIterator, Iterator
 
-from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -25,7 +22,6 @@ from util.logging_util import setup_logger
 logger = setup_logger(__name__)
 
 API_PREFIX = "/api/triage"
-CF_ACCESS_EMAIL_HEADER = "Cf-Access-Authenticated-User-Email"
 
 
 def db_session() -> Iterator[Session]:
@@ -46,25 +42,6 @@ def route_paper_in_background(paper_id: int, settings: Settings) -> None:
         if paper is None:
             return
         routing.route_and_schedule(paper, settings)
-
-
-def make_access_guard(settings: Settings):
-    """Build the Cloudflare Access verification dependency for this app."""
-
-    def verify_cf_access(
-        cf_email: Optional[str] = Header(default=None, alias=CF_ACCESS_EMAIL_HEADER),
-    ) -> None:
-        if not settings.require_cf_access:
-            return
-        if not cf_email:
-            raise HTTPException(
-                status_code=403, detail="Missing Cloudflare Access identity"
-            )
-        if settings.allowed_email and cf_email.lower() != settings.allowed_email.lower():
-            logger.warning("rejected Access identity: %s", cf_email)
-            raise HTTPException(status_code=403, detail="Identity not permitted")
-
-    return verify_cf_access
 
 
 def create_app() -> FastAPI:
@@ -109,15 +86,11 @@ def create_app() -> FastAPI:
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
-    # Every triage route is gated by the Access guard.
-    router = APIRouter(
-        prefix=API_PREFIX,
-        dependencies=[Depends(make_access_guard(settings))],
-    )
+    router = APIRouter(prefix=API_PREFIX)
 
     @router.get("/queue", response_model=list[PaperOut])
     def queue(session: Session = Depends(db_session)) -> list[PaperOut]:
-        papers = repository.get_pending_papers(session, settings.min_relevance_score)
+        papers = repository.get_pending_papers(session)
         logger.info("queue requested: %d pending papers", len(papers))
         return [PaperOut.from_orm_article(p) for p in papers]
 

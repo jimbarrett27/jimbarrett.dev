@@ -11,11 +11,6 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class Settings:
-    # Only papers the screener scored strictly above this make it into the
-    # triage queue. The screener sets non-relevant papers to 0.0, so the
-    # default of 0.0 selects exactly the "surfaced" papers.
-    min_relevance_score: float = 0.0
-
     # Bind address. In production Caddy on the same host proxies /api here, so
     # binding to localhost is fine.
     host: str = "127.0.0.1"
@@ -23,14 +18,6 @@ class Settings:
 
     # How long after a decision the user may still undo it.
     undo_window_seconds: int = 30
-
-    # --- Cloudflare Access (defence in depth) ---
-    # When enabled, every /api/triage request must carry a
-    # Cf-Access-Authenticated-User-Email header matching `allowed_email`.
-    # Off by default. Production no longer uses it either: the app is now only
-    # reachable over Tailscale, not through Cloudflare.
-    require_cf_access: bool = False
-    allowed_email: str = ""
 
     # Origins permitted by CORS. Empty (the production setting) disables it: Caddy
     # serves the UI and the API from the same origin.
@@ -74,15 +61,9 @@ def _csv(value: str) -> tuple[str, ...]:
 def get_settings() -> Settings:
     """Build settings from environment variables (with sensible defaults)."""
     return Settings(
-        min_relevance_score=float(
-            os.environ.get("TRIAGE_MIN_RELEVANCE_SCORE", "0.0")
-        ),
         host=os.environ.get("TRIAGE_HOST", "127.0.0.1"),
         port=int(os.environ.get("TRIAGE_PORT", "8077")),
         undo_window_seconds=int(os.environ.get("TRIAGE_UNDO_WINDOW_SECONDS", "30")),
-        require_cf_access=os.environ.get("TRIAGE_REQUIRE_CF_ACCESS", "false").lower()
-        in ("1", "true", "yes"),
-        allowed_email=os.environ.get("TRIAGE_ALLOWED_EMAIL", ""),
         allowed_origins=_csv(os.environ.get("TRIAGE_ALLOWED_ORIGINS", "")),
         obsidian_vault=os.environ.get("TRIAGE_OBSIDIAN_VAULT", ""),
         obsidian_inbox_subdir=os.environ.get(

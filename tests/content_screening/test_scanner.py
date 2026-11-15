@@ -10,6 +10,17 @@ from sqlalchemy import create_engine, select
 from content_screening import db_engine
 from content_screening.models import Article, SourceType
 from content_screening.orm_models import ArticleORM, Base
+from content_screening.screener import ScreeningResult
+
+
+def _result(is_relevant: bool, **kw) -> ScreeningResult:
+    return ScreeningResult(
+        status="pending" if is_relevant else "auto_rejected",
+        score=0.8 if is_relevant else 0.0,
+        reasoning="reason",
+        tags=["tag"],
+        **kw,
+    )
 
 
 @pytest.fixture
@@ -46,11 +57,10 @@ class TestProcessNewArticlesStatus:
         from content_screening import scanner
 
         # Patch via the scanner module namespace so the already-bound names are replaced.
-        score = 0.8 if is_relevant else 0.0
         monkeypatch.setattr(
             scanner,
             "screen_article",
-            lambda _a: (is_relevant, score, "reason", ["tag"], "skim"),
+            lambda _a, _profile=None: _result(is_relevant),
         )
         monkeypatch.setattr(
             scanner,
@@ -59,6 +69,17 @@ class TestProcessNewArticlesStatus:
         )
 
         return scanner.process_new_articles(articles)
+
+    def test_rows_are_stamped_with_profile_and_model(self, temp_db, monkeypatch):
+        """Every inserted row records the profile and model that screened it."""
+        self._run([_make_article("stamp-001")], monkeypatch, is_relevant=False)
+
+        with db_engine.get_session() as session:
+            row = session.scalars(
+                select(ArticleORM).where(ArticleORM.external_id == "stamp-001")
+            ).one()
+            stamped = (row.profile, row.screening_model, row.rubric_answers)
+        assert stamped == ("pv", "deepseek/deepseek-v4.1-flash", None)
 
     def test_relevant_article_inserted_as_pending(self, temp_db, monkeypatch):
         """A screener-relevant article lands with status='pending'."""
@@ -92,9 +113,8 @@ class TestProcessNewArticlesStatus:
         relevant_ids = {"rel-A", "rel-B"}
         non_relevant_ids = {"rej-X", "rej-Y"}
 
-        def fake_screen(article):
-            is_rel = article.external_id in relevant_ids
-            return (is_rel, 0.8 if is_rel else 0.0, "r", [], "skim")
+        def fake_screen(article, profile=None):
+            return _result(article.external_id in relevant_ids)
 
         monkeypatch.setattr(scanner, "screen_article", fake_screen)
         monkeypatch.setattr(scanner, "compute_article_embedding", lambda _a: None)
@@ -116,3 +136,24 @@ class TestProcessNewArticlesStatus:
             assert statuses[eid] == "pending", f"{eid} should be pending"
         for eid in non_relevant_ids:
             assert statuses[eid] == "auto_rejected", f"{eid} should be auto_rejected"
+
+
+def test_rubric_answers_and_score_are_stored(temp_db, monkeypatch):
+    """The raw rubric answers and the computed score land on the row as-is."""
+    from content_screening import scanner
+
+    answers = {"fincrime": {"answer": "strongly_agree", "justification": "AML."}}
+    monkeypatch.setattr(
+        scanner, "screen_article",
+        lambda _a, _p=None: ScreeningResult(
+            status="pending", score=-1.5, reasoning="summary", tags=[],
+            rubric_answers=answers,
+        ),
+    )
+    monkeypatch.setattr(scanner, "compute_article_embedding", lambda _a: None)
+    scanner.process_new_articles([_make_article("rub-001")])
+
+    with db_engine.get_session() as session:
+        row = session.scalars(select(ArticleORM)).one()
+        stored = (row.status, row.llm_interest_score, row.rubric_answers, row.suggested_depth)
+    assert stored == ("pending", -1.5, answers, None)

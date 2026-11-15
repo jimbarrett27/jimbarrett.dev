@@ -51,7 +51,7 @@ _UNSAFE = re.compile(r'[\\/:*?"<>|\x00-\x1f]+')
 
 def _openalex_pdf_url(paper: ArticleORM) -> Optional[str]:
     # Imported here: content_screening.openalex pulls in the whole discovery stack.
-    from content_screening.openalex import _get, load_discovery_config
+    from content_screening.openalex import DEFAULT_MAILTO, _get
 
     metadata = paper.metadata_ or {}
     if metadata.get("openalex_id"):
@@ -62,7 +62,7 @@ def _openalex_pdf_url(paper: ArticleORM) -> Optional[str]:
         return None
     try:
         work = _get(f"works/{key}", {"select": "best_oa_location,locations"},
-                    load_discovery_config().mailto)
+                    DEFAULT_MAILTO)
     except requests.HTTPError as exc:
         if exc.response is not None and exc.response.status_code == 404:
             return None
@@ -116,24 +116,43 @@ def _authors(authors: list[str] | None) -> str:
     return ", ".join(authors)
 
 
-def _rubric_rows(paper: ArticleORM) -> str:
-    """Rubric answers, once the rubric scoring exists (REWORK_PLAN §1.3).
+_ANSWER_LABELS = {
+    "strongly_agree": "strongly agree", "agree": "agree", "neutral": "neutral",
+    "disagree": "disagree", "strongly_disagree": "strongly disagree",
+    "cant_tell": "can't tell",
+}
 
-    Expected shape: a list of {statement, answer (-2..2 or None), justification}.
-    Anything else is ignored, so this keeps working while that shape settles.
+
+def _rubric_statements(profile_name: Optional[str]) -> dict:
+    """Statement id -> text from the paper's profile; empty if it can't be loaded."""
+    from content_screening.profile import ProfileError, load_profile
+
+    if not profile_name:
+        return {}
+    try:
+        return {s.id: s.statement for s in load_profile(profile_name).rubric}
+    except ProfileError:
+        return {}
+
+
+def _rubric_rows(paper: ArticleORM) -> str:
+    """The rubric answers (REWORK_PLAN 1.3), one row per statement.
+
+    ``rubric_answers`` is ``{statement_id: {answer, justification}}`` as stored
+    by the screener; statement text comes from the paper's profile, falling back
+    to the id. Anything malformed is skipped.
     """
     answers = getattr(paper, "rubric_answers", None)
-    if not isinstance(answers, list):
+    if not isinstance(answers, dict):
         return ""
-    labels = {2: "strongly agree", 1: "agree", 0: "neutral", -1: "disagree",
-              -2: "strongly disagree", None: "can't tell"}
+    statements = _rubric_statements(getattr(paper, "profile", None))
     rows = []
-    for answer in answers:
-        if not isinstance(answer, dict) or "statement" not in answer:
+    for statement_id, answer in answers.items():
+        if not isinstance(answer, dict) or "answer" not in answer:
             continue
         rows.append(
-            f"<tr><td class='stmt'>{_e(answer['statement'])}</td>"
-            f"<td class='ans'>{_e(labels.get(answer.get('answer'), answer.get('answer')))}</td>"
+            f"<tr><td class='stmt'>{_e(statements.get(statement_id, statement_id))}</td>"
+            f"<td class='ans'>{_e(_ANSWER_LABELS.get(answer['answer'], answer['answer']))}</td>"
             f"<td>{_e(answer.get('justification'))}</td></tr>"
         )
     if not rows:

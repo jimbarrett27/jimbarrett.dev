@@ -23,6 +23,7 @@ from content_screening.embeddings import compute_article_embedding
 from content_screening.models import Article, SourceType
 from content_screening.openalex import fetch_openalex_articles
 from content_screening.orm_models import ArticleORM
+from content_screening.profile import Profile, get_active_profile
 from content_screening.rss_feed import fetch_rss_articles
 from content_screening.screener import screen_article
 from util.logging_util import setup_logger
@@ -33,6 +34,7 @@ logger = setup_logger(__name__)
 def process_new_articles(
     articles: List[Article],
     dedup_index: Optional[Tuple[set, set]] = None,
+    profile: Optional[Profile] = None,
 ) -> tuple[int, int]:
     """Screen new (unseen) articles with the LLM and insert them.
 
@@ -42,9 +44,11 @@ def process_new_articles(
     one run so duplicates are caught across them; otherwise one is loaded here.
 
     Triage replaces the old per-article Telegram notifications, so nothing is
-    sent here — papers simply land in the DB for the triage queue. Returns
+    sent here — papers simply land in the DB for the triage queue. Every row is
+    stamped with the profile and model that screened it. Returns
     ``(new_inserted, new_relevant)``.
     """
+    profile = profile or get_active_profile()
     doi_set, title_set, id_set = (
         dedup_index if dedup_index is not None else load_dedup_index()
     )
@@ -56,22 +60,24 @@ def process_new_articles(
             logger.debug(f"Duplicate article skipped: {article.external_id}")
             continue
 
-        is_relevant, score, reasoning, tags, suggested_depth = screen_article(article)
-        article.llm_interest_score = score if is_relevant else 0.0
-        article.llm_reasoning = reasoning
-        article.llm_tags = tags
-        article.suggested_depth = suggested_depth
+        result = screen_article(article, profile)
+        article.profile = profile.name
+        article.screening_model = profile.model
+        article.llm_interest_score = result.score
+        article.llm_reasoning = result.reasoning
+        article.llm_tags = result.tags
+        article.rubric_answers = result.rubric_answers
 
         # Embed every article (relevant or not) to accumulate feature vectors for
         # a future supervised relevance model — triage decisions are the labels.
         # Best-effort: None on failure, never blocks ingestion.
         article.embedding = compute_article_embedding(article)
 
-        # Always insert (relevant ones enter the triage queue as 'pending'; the
-        # rest are kept for record-keeping with status 'auto_rejected'). Guard
-        # the insert so a single stray duplicate (e.g. a dedup-key miss) can't
-        # abort the whole scan and drop the daily summary message.
-        status = "pending" if is_relevant else "auto_rejected"
+        # Always insert: queued papers enter triage as 'pending', the rest are
+        # kept in full as 'auto_rejected'. Guard the insert so a single stray
+        # duplicate (e.g. a dedup-key miss) can't abort the whole scan.
+        status = result.status
+        is_relevant = status == "pending"
         try:
             article.id = insert_article(article, status=status)
         except IntegrityError:
@@ -87,34 +93,46 @@ def process_new_articles(
     return new_inserted, new_relevant
 
 
-def run_arxiv_scan(dedup_index: Optional[Tuple[set, set]] = None) -> tuple[int, int, int]:
+def run_arxiv_scan(
+    dedup_index: Optional[Tuple[set, set]] = None,
+    profile: Optional[Profile] = None,
+) -> tuple[int, int, int]:
     """Scan ArXiv feeds. Returns (total_found, new_inserted, new_relevant)."""
     logger.info("Starting ArXiv scan")
-    articles = fetch_arxiv_papers()
+    profile = profile or get_active_profile()
+    articles = fetch_arxiv_papers(profile=profile)
     total_found = len(articles)
-    new_inserted, new_relevant = process_new_articles(articles, dedup_index)
+    new_inserted, new_relevant = process_new_articles(articles, dedup_index, profile)
     update_scan_history(SourceType.ARXIV, total_found, new_relevant)
     logger.info(f"ArXiv scan complete: {total_found} found, {new_inserted} new, {new_relevant} relevant")
     return total_found, new_inserted, new_relevant
 
 
-def run_rss_scan(dedup_index: Optional[Tuple[set, set]] = None) -> tuple[int, int, int]:
+def run_rss_scan(
+    dedup_index: Optional[Tuple[set, set]] = None,
+    profile: Optional[Profile] = None,
+) -> tuple[int, int, int]:
     """Scan RSS feeds. Returns (total_found, new_inserted, new_relevant)."""
     logger.info("Starting RSS scan")
-    articles = fetch_rss_articles()
+    profile = profile or get_active_profile()
+    articles = fetch_rss_articles(profile=profile)
     total_found = len(articles)
-    new_inserted, new_relevant = process_new_articles(articles, dedup_index)
+    new_inserted, new_relevant = process_new_articles(articles, dedup_index, profile)
     update_scan_history(SourceType.RSS, total_found, new_relevant)
     logger.info(f"RSS scan complete: {total_found} found, {new_inserted} new, {new_relevant} relevant")
     return total_found, new_inserted, new_relevant
 
 
-def run_openalex_scan(dedup_index: Optional[Tuple[set, set]] = None) -> tuple[int, int, int]:
+def run_openalex_scan(
+    dedup_index: Optional[Tuple[set, set]] = None,
+    profile: Optional[Profile] = None,
+) -> tuple[int, int, int]:
     """Scan OpenAlex. Returns (total_found, new_inserted, new_relevant)."""
     logger.info("Starting OpenAlex scan")
-    articles = fetch_openalex_articles()
+    profile = profile or get_active_profile()
+    articles = fetch_openalex_articles(profile.openalex, keywords=profile.keywords)
     total_found = len(articles)
-    new_inserted, new_relevant = process_new_articles(articles, dedup_index)
+    new_inserted, new_relevant = process_new_articles(articles, dedup_index, profile)
     update_scan_history(SourceType.OPENALEX, total_found, new_relevant)
     logger.info(f"OpenAlex scan complete: {total_found} found, {new_inserted} new, {new_relevant} relevant")
     return total_found, new_inserted, new_relevant
@@ -126,22 +144,25 @@ def count_pending_triage() -> int:
         return session.scalar(
             select(func.count())
             .select_from(ArticleORM)
-            .where(ArticleORM.status == "pending", ArticleORM.llm_interest_score > 0)
+            .where(ArticleORM.status == "pending")
         ) or 0
 
 
 def run_full_scan() -> dict:
     """Run all source scans (silently) and return summary counts.
 
-    A single dedup index is shared across the sources so the same paper arriving
+    Runs under the active interest profile, loaded once. A single dedup index
+    is shared across the sources so the same paper arriving
     from more than one feed in this run is inserted only once. ``found`` counts
     everything the feeds returned before dedup, so zero means the feeds came back
     empty (the fetchers swallow per-feed errors) rather than "nothing new".
     """
+    profile = get_active_profile()
+    logger.info(f"Full scan under profile {profile.name!r}")
     dedup_index = load_dedup_index()
-    a_found, a_new, a_rel = run_arxiv_scan(dedup_index)
-    r_found, r_new, r_rel = run_rss_scan(dedup_index)
-    o_found, o_new, o_rel = run_openalex_scan(dedup_index)
+    a_found, a_new, a_rel = run_arxiv_scan(dedup_index, profile)
+    r_found, r_new, r_rel = run_rss_scan(dedup_index, profile)
+    o_found, o_new, o_rel = run_openalex_scan(dedup_index, profile)
     return {
         "found": a_found + r_found + o_found,
         "new": a_new + r_new + o_new,

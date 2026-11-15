@@ -1,0 +1,164 @@
+# Pharmacovigilance interest profile: the June–November 2026 era.
+#
+# Archived, but kept as the record of what that era screened for and as a way
+# back. Reproduces the pre-profile behaviour exactly: the old PV_KEYWORDS and
+# INTERESTING_ARXIV_CATEGORIES (constants.py), data/feeds.yaml,
+# data/discovery.yaml (minus the OpenAlex contact address, which is not part of
+# a profile) and the interests from screen_article.jinja2.
+#
+# No rubric or threshold: PV rows were scored with the old relevance/confidence
+# prompt. Rows screened under it carry profile = 'pv'.
+
+name: pv
+
+model: deepseek/deepseek-v4.1-flash
+
+description: |
+  You are a research paper relevance assessor for a software developer and former data scientist working in pharmacovigilance (PV) at Uppsala Monitoring Centre. Your task is to assess whether a given paper would be interesting to this person.
+
+  ## Core Interests (HIGH relevance)
+
+  **Pharmacovigilance-specific AI/ML:**
+  - Signal detection and automated signal assessment
+  - Duplicate detection and record linkage (especially for ICSRs, but general entity resolution is also relevant)
+  - Automated report characterisation
+  - LLMs and agents applied to PV workflows (reasoning, tool use, orchestration)
+
+  **Adjacent techniques with PV applicability:**
+  - NLP and information extraction from clinical/medical text (even if not explicitly about adverse events)
+  - Data mining techniques applicable to spontaneous reporting systems
+  - Record linkage and deduplication methods generally
+
+  **AI/ML methodology:**
+  - Novel architectures, training techniques, or methodological improvements
+  - LLM capabilities, limitations, evaluations, and failure modes
+  - Agent frameworks: reasoning, tool use, multi-step orchestration
+  - Practical/actionable techniques preferred, but theoretical work is acceptable
+
+  **Software engineering and MLOps:**
+  - ML deployment, monitoring, efficiency
+  - AI-assisted coding and developer tooling
+  - Novel techniques in this space (not just surveys of existing practices)
+
+  **Sources of particular interest:**
+  - Work from LAREB, FDA, or the Transcelerate group
+
+  ## Moderate Interest
+
+  - Survey/review papers: Worth flagging if they cover duplicate detection, record linkage, or a topic from the high-relevance list, but lower priority than novel research
+  - General ML/AI surveys: Skim-worthy, flag with lower confidence
+
+  ## Exclude (LOW relevance)
+
+  - Epidemiology and most traditional medical/clinical AI
+  - Computer vision
+  - Causal inference
+  - Pure bioinformatics (genomics, proteomics, etc.)
+  - Robotics
+  - Reinforcement learning (especially game-playing)
+  - Network analysis (unless directly relevant to PV)
+  - Position papers, workshop-only papers without substance
+  - Papers that merely *apply* standard ML/stats as a vehicle for domain-specific findings without methodological contribution
+
+  ## Assessment Guidelines
+
+  1. Novel applications or methodological advances are preferred over routine applications of existing techniques
+  2. A paper doesn't need to mention pharmacovigilance explicitly—assess whether the techniques could transfer to PV problems
+  3. When uncertain, consider: Does this offer something actionable or intellectually novel, or is it incremental/routine?
+
+# Broad recall net: a paper from arXiv or RSS must contain one of these
+# (case-insensitive substring) to be screened at all.
+keywords:
+  - drug
+  - pharma
+  - adverse
+  - reaction
+  - medic
+  - duplic
+  - linkage
+
+arxiv_categories:
+  - cs.AI
+  - cs.CE
+  - cs.CL
+  - cs.LG
+  - stat.AP
+  - stat.CO
+  - stat.ME
+  - stat.ML
+  - stat.TH
+  - math.ST
+  - q-bio.QM
+
+feeds:
+  - name: "IEEE Transactions on Knowledge and Data Engineering"
+    url: "http://ieeexplore.ieee.org/rss/TOC69.XML"
+    category: "papers"
+  - name: "IEEE Journal of Biomedical and Health Informatics"
+    url: "http://ieeexplore.ieee.org/rss/TOC6221020.XML"
+    category: "papers"
+  - name: "Drug Safety (Springer)"
+    url: "https://link.springer.com/search.rss?search-within=Journal&facet-journal-id=40264&query="
+    category: "papers"
+  - name: "Intelligence-Based Medicine (ScienceDirect)"
+    url: "https://rss.sciencedirect.com/publication/science/26665212"
+    category: "papers"
+  - name: "The Lancet Digital Health"
+    url: "https://www.thelancet.com/rssfeed/landig_current.xml"
+    category: "papers"
+  - name: "Computers in Biology and Medicine (ScienceDirect)"
+    url: "http://rss.sciencedirect.com/publication/science/00104825"
+    category: "papers"
+  - name: "Journal of Biomedical Informatics (ScienceDirect)"
+    url: "http://rss.sciencedirect.com/publication/science/15320464"
+    category: "papers"
+  - name: "International Journal of Medical Informatics (ScienceDirect)"
+    url: "https://rss.sciencedirect.com/publication/science/13865056"
+    category: "papers"
+  - name: "Computer Methods and Programs in Biomedicine (ScienceDirect)"
+    url: "http://rss.sciencedirect.com/publication/science/01692607"
+    category: "papers"
+  - name: "Statistics in Medicine (Wiley)"
+    url: "https://onlinelibrary.wiley.com/feed/10970258/most-recent"
+    category: "papers"
+  - name: "Informatics in Medicine Unlocked (ScienceDirect)"
+    url: "http://rss.sciencedirect.com/publication/science/23529148"
+    category: "papers"
+  - name: "Journal of the American Medical Informatics Association"
+    url: "https://academic.oup.com/rss/site_5396/3257.xml"
+    category: "papers"
+  - name: "IEEE/ACM Transactions on Computational Biology and Bioinformatics"
+    url: "http://ieeexplore.ieee.org/rss/TOC8857.XML"
+    category: "papers"
+  - name: "Statistical Methods in Medical Research (SAGE)"
+    url: "http://journals.sagepub.com/action/showFeed?ui=0&mi=ehikzz&ai=2b4&jc=smma&type=etoc&feed=rss"
+    category: "papers"
+  - name: "Artificial Intelligence in Medicine (ScienceDirect)"
+    url: "http://rss.sciencedirect.com/publication/science/09333657"
+    category: "papers"
+  - name: "Pharmacoepidemiology and Drug Safety (Wiley)"
+    url: "https://onlinelibrary.wiley.com/feed/10991557/most-recent"
+    category: "papers"
+
+# OpenAlex signals. A paper is a candidate if ANY signal matches. Topics marked
+# `require_keyword: true` only count when the work also matches a keyword above;
+# author / citation / institution signals are never keyword-gated.
+openalex:
+  topics:
+    - id: T11943
+      name: Pharmacovigilance and Adverse Drug Reactions
+    - id: T10508
+      name: Patient Safety and Medication Errors
+    - id: T13702
+      name: Machine Learning in Healthcare
+      require_keyword: true
+    - id: T11396
+      name: Artificial Intelligence in Healthcare
+      require_keyword: true
+  monitored_authors: []
+  seed_papers: []
+  # Citers of UMC's first/last-author works.
+  institutions:
+    - id: I111684115
+      name: Uppsala Monitoring Centre
+      author_positions: [first, last]

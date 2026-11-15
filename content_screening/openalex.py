@@ -19,29 +19,22 @@ broad keyword net (shared with the other sources) still annotates
 a single seam.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import replace
 from datetime import date, datetime, timedelta
-from pathlib import Path
-from typing import Dict, Iterator, List, Optional
+from typing import Dict, Iterable, Iterator, List, Optional
 
 import requests
-import yaml
 
-from content_screening.constants import (
-    MODULE_ROOT,
-    PV_KEYWORDS,
-    SCAN_LOOKBACK_DAYS,
-    find_matching_keywords,
-)
+from content_screening.constants import SCAN_LOOKBACK_DAYS, find_matching_keywords
 from content_screening.database import normalize_doi
 from content_screening.models import Article, SourceType
+from content_screening.profile import DiscoveryConfig, get_active_profile
 from util.logging_util import setup_logger
 
 logger = setup_logger(__name__)
 
 OPENALEX_BASE = "https://api.openalex.org"
 DEFAULT_MAILTO = "jimbarrett27@gmail.com"
-DISCOVERY_CONFIG_PATH = MODULE_ROOT / "data" / "discovery.yaml"
 
 # Only the fields we actually map -- keeps payloads small.
 WORK_SELECT = (
@@ -80,40 +73,6 @@ DEFAULT_TRUSTED_PUBLISHERS = frozenset(
         "royal society of chemistry",
     }
 )
-
-
-# --- Config -----------------------------------------------------------------
-
-
-@dataclass
-class DiscoveryConfig:
-    """Parsed ``discovery.yaml``."""
-
-    mailto: str = DEFAULT_MAILTO
-    topics: List[dict] = field(default_factory=list)          # [{id, name}]
-    monitored_authors: List[str] = field(default_factory=list)
-    seed_papers: List[str] = field(default_factory=list)
-    institutions: List[dict] = field(default_factory=list)    # [{id, name, author_positions}]
-    trusted_publishers: List[str] = field(default_factory=list)  # extra allowlist, added to defaults
-
-
-def load_discovery_config(config_path: Path = DISCOVERY_CONFIG_PATH) -> DiscoveryConfig:
-    """Load discovery configuration from YAML (empty/missing -> empty config)."""
-    if not config_path.exists():
-        logger.warning(f"Discovery config not found at {config_path}")
-        return DiscoveryConfig()
-
-    with open(config_path, "r") as f:
-        data = yaml.safe_load(f) or {}
-
-    return DiscoveryConfig(
-        mailto=data.get("mailto") or DEFAULT_MAILTO,
-        topics=data.get("topics") or [],
-        monitored_authors=data.get("monitored_authors") or [],
-        seed_papers=data.get("seed_papers") or [],
-        institutions=data.get("institutions") or [],
-        trusted_publishers=data.get("trusted_publishers") or [],
-    )
 
 
 # --- HTTP / pagination ------------------------------------------------------
@@ -221,7 +180,9 @@ def _map_authorships(authorships: List[dict]) -> tuple[List[str], List[dict]]:
     return names, rich
 
 
-def _work_to_article(work: dict, surfaced_by: List[str]) -> Optional[Article]:
+def _work_to_article(
+    work: dict, surfaced_by: List[str], keywords: Iterable[str] = ()
+) -> Optional[Article]:
     """Map an OpenAlex work to an ``Article``; ``None`` if unusable/bogus."""
     title = (work.get("title") or "").strip()
     if not title:
@@ -251,7 +212,7 @@ def _work_to_article(work: dict, surfaced_by: List[str]) -> Optional[Article]:
     topic_names = [t.get("display_name") for t in topics if t.get("display_name")]
     topic_ids = [_short_id(t.get("id")) for t in topics if t.get("id")]
 
-    keywords_matched = find_matching_keywords(f"{title} {abstract or ''}", PV_KEYWORDS)
+    keywords_matched = find_matching_keywords(f"{title} {abstract or ''}", keywords)
 
     return Article(
         external_id=work_id,
@@ -281,17 +242,17 @@ def _work_to_article(work: dict, surfaced_by: List[str]) -> Optional[Article]:
 # --- Signals ----------------------------------------------------------------
 
 
-def _topic_works(cfg: DiscoveryConfig, from_date: str) -> Iterator[tuple[dict, str]]:
+def _topic_works(cfg: DiscoveryConfig, date_filter: str) -> Iterator[tuple[dict, str]]:
     """Recent works with any of the configured topics (signal: ``topic``)."""
     topic_ids = [t["id"] for t in cfg.topics if t.get("id")]
     if not topic_ids:
         return
-    filter_str = f"topics.id:{'|'.join(topic_ids)},from_publication_date:{from_date}"
+    filter_str = f"topics.id:{'|'.join(topic_ids)},{date_filter}"
     for work in _paginate_works(filter_str, cfg.mailto):
         yield work, "topic"
 
 
-def _author_works(cfg: DiscoveryConfig, from_date: str) -> Iterator[tuple[dict, str]]:
+def _author_works(cfg: DiscoveryConfig, date_filter: str) -> Iterator[tuple[dict, str]]:
     """Recent works by monitored authors (signal: ``author``).
 
     Splits the watchlist into OpenAlex author IDs (start with 'A') and ORCIDs.
@@ -302,7 +263,7 @@ def _author_works(cfg: DiscoveryConfig, from_date: str) -> Iterator[tuple[dict, 
     for author_ids in _batched(ids, CITES_BATCH):
         filter_str = (
             f"authorships.author.id:{'|'.join(author_ids)},"
-            f"from_publication_date:{from_date}"
+            f"{date_filter}"
         )
         for work in _paginate_works(filter_str, cfg.mailto):
             yield work, "author"
@@ -310,25 +271,25 @@ def _author_works(cfg: DiscoveryConfig, from_date: str) -> Iterator[tuple[dict, 
     for orcid_batch in _batched(orcids, CITES_BATCH):
         filter_str = (
             f"authorships.author.orcid:{'|'.join(orcid_batch)},"
-            f"from_publication_date:{from_date}"
+            f"{date_filter}"
         )
         for work in _paginate_works(filter_str, cfg.mailto):
             yield work, "author"
 
 
-def _citers_of(seed_ids: List[str], cfg: DiscoveryConfig, from_date: str, signal: str) -> Iterator[tuple[dict, str]]:
+def _citers_of(seed_ids: List[str], cfg: DiscoveryConfig, date_filter: str, signal: str) -> Iterator[tuple[dict, str]]:
     """Recent works citing any of ``seed_ids`` (batched into ``cites:`` filters)."""
     for batch in _batched(seed_ids, CITES_BATCH):
-        filter_str = f"cites:{'|'.join(batch)},from_publication_date:{from_date}"
+        filter_str = f"cites:{'|'.join(batch)},{date_filter}"
         for work in _paginate_works(filter_str, cfg.mailto):
             yield work, signal
 
 
-def _seed_citers(cfg: DiscoveryConfig, from_date: str) -> Iterator[tuple[dict, str]]:
+def _seed_citers(cfg: DiscoveryConfig, date_filter: str) -> Iterator[tuple[dict, str]]:
     """Citers of explicitly configured seed papers (signal: ``citation``)."""
     if not cfg.seed_papers:
         return
-    yield from _citers_of(list(cfg.seed_papers), cfg, from_date, "citation")
+    yield from _citers_of(list(cfg.seed_papers), cfg, date_filter,"citation")
 
 
 def _resolve_institution_seed_works(institution: dict, mailto: str) -> List[str]:
@@ -358,7 +319,7 @@ def _resolve_institution_seed_works(institution: dict, mailto: str) -> List[str]
     return seed_ids
 
 
-def _institution_citers(cfg: DiscoveryConfig, from_date: str) -> Iterator[tuple[dict, str]]:
+def _institution_citers(cfg: DiscoveryConfig, date_filter: str) -> Iterator[tuple[dict, str]]:
     """Citers of watched institutions' first/last-author works (signal: ``institution``)."""
     for institution in cfg.institutions:
         seed_ids = _resolve_institution_seed_works(institution, cfg.mailto)
@@ -368,7 +329,7 @@ def _institution_citers(cfg: DiscoveryConfig, from_date: str) -> Iterator[tuple[
             len(seed_ids),
             institution.get("author_positions"),
         )
-        yield from _citers_of(seed_ids, cfg, from_date, "institution")
+        yield from _citers_of(seed_ids, cfg, date_filter,"institution")
 
 
 def _publisher_trusted(publisher: Optional[str], trusted: frozenset) -> bool:
@@ -406,7 +367,7 @@ def _topic_gated_out(
     """Whether a topic-surfaced work should be dropped by the keyword gate.
 
     Dropped iff it matched *only* gated (broad) topics — none of the focused,
-    ungated topics — and carries no PV keyword. Works that match a focused topic
+    ungated topics — and carries no profile keyword. Works that match a focused topic
     are always kept; works with a keyword are always kept.
     """
     matched = set(article.metadata.get("topic_ids") or []) & configured_topic_ids
@@ -421,21 +382,35 @@ def _topic_gated_out(
 def fetch_openalex_articles(
     config: Optional[DiscoveryConfig] = None,
     lookback_days: int = SCAN_LOOKBACK_DAYS,
+    keywords: Optional[Iterable[str]] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
 ) -> List[Article]:
     """Fetch candidate articles from all configured OpenAlex signals.
 
-    Works surfaced by multiple signals are merged into a single ``Article`` with
-    the union of ``surfaced_by`` tags (deduped by OpenAlex work id within the
-    fetch). Cross-source dedup against existing DB rows happens later in the
-    scanner.
-    """
-    if config is None:
-        config = load_discovery_config()
+    Works published from ``lookback_days`` ago, or within ``[from_date,
+    to_date]`` (inclusive) when given, as the seed backfill does.
 
-    from_date = _from_date(lookback_days)
+    ``config`` and ``keywords`` default to the active profile's. Works surfaced
+    by multiple signals are merged into a single ``Article`` with the union of
+    ``surfaced_by`` tags (deduped by OpenAlex work id within the fetch).
+    Cross-source dedup against existing DB rows happens later in the scanner.
+    """
+    if config is None or keywords is None:
+        profile = get_active_profile()
+        config = config if config is not None else profile.openalex
+        keywords = keywords if keywords is not None else profile.keywords
+    # The contact address is not part of a profile.
+    if not config.mailto:
+        config = replace(config, mailto=DEFAULT_MAILTO)
+
+    start = from_date.isoformat() if from_date else _from_date(lookback_days)
+    date_filter = f"from_publication_date:{start}"
+    if to_date:
+        date_filter += f",to_publication_date:{to_date.isoformat()}"
 
     # Topic keyword gate: works surfaced *only* by a broad (require_keyword) topic
-    # must also match a PV keyword; works matching a focused topic are ungated.
+    # must also match a profile keyword; works matching a focused topic are ungated.
     # Author/citation/institution signals are never gated.
     configured_topic_ids = {t["id"] for t in config.topics if t.get("id")}
     gated_topic_ids = {
@@ -443,15 +418,15 @@ def fetch_openalex_articles(
     }
     focused_topic_ids = configured_topic_ids - gated_topic_ids
 
-    # Baked-in reputable publishers, extended by any in discovery.yaml.
+    # Baked-in reputable publishers, extended by any in the profile.
     trusted_publishers = DEFAULT_TRUSTED_PUBLISHERS | {
         p.strip().lower() for p in config.trusted_publishers if p and p.strip()
     }
     signal_streams = (
-        _topic_works(config, from_date),
-        _author_works(config, from_date),
-        _seed_citers(config, from_date),
-        _institution_citers(config, from_date),
+        _topic_works(config, date_filter),
+        _author_works(config, date_filter),
+        _seed_citers(config, date_filter),
+        _institution_citers(config, date_filter),
     )
 
     by_id: Dict[str, Article] = {}
@@ -466,7 +441,7 @@ def fetch_openalex_articles(
                     if signal not in existing.surfaced_by:
                         existing.surfaced_by.append(signal)
                     continue
-                article = _work_to_article(work, [signal])
+                article = _work_to_article(work, [signal], keywords)
                 if article is None:
                     continue
                 if signal == "topic":

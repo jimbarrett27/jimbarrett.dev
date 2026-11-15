@@ -1,0 +1,266 @@
+# Financial crime / fraud prevention, GenAI data science. The default profile.
+#
+# Until the seed backfill (REWORK_PLAN 1.5) sets `threshold`, the daily scan
+# screens and stores papers but queues none of them.
+#
+# Volumes below were measured on 2026-11-15 over the previous month. The goal is
+# narrow discovery: a few papers a day screened, not hundreds.
+
+name: fincrime
+
+model: deepseek/deepseek-v4.1-flash-1017
+
+description: |
+  You are assessing research papers for a data scientist joining the financial-crime
+  prevention unit of a large Nordic bank, on a team that builds machine learning
+  and generative AI for fraud and anti-money-laundering (AML) work. They come from
+  pharmacovigilance, where they worked on signal detection in under-reported data,
+  duplicate detection and record linkage, and LLM-assisted triage and coding.
+
+  What they want to read:
+
+  - Detection of payment and card fraud, authorised push-payment (APP) and
+    impersonation scams, money mules, and money laundering in transaction data.
+  - Making rule-based alerting cheaper and more accurate: alert triage and
+    prioritisation, false-positive reduction, scoring alerts beside existing rules.
+  - Generative AI and LLM agents in investigation and compliance work: case
+    review, evidence gathering, drafting investigation narratives or suspicious
+    activity reports, with a human in the loop.
+  - Graph methods for networks of accounts and counterparties, and entity
+    resolution and name matching (customers, mules, sanctions and payee checks).
+  - The hard practical problems: scarce, biased and delayed labels; adversarial
+    drift; extreme class imbalance; cost-sensitive thresholds; explainability and
+    audit trails that a regulator would accept; synthetic data where real data
+    can't be shared.
+
+  What they don't want: routine "credit card fraud detection with machine
+  learning" papers that train standard classifiers on a small public dataset
+  (the Kaggle European cardholders set and its like) with no new idea; legal,
+  regulatory or criminological commentary with no data science in it;
+  cryptocurrency-only work unless the method clearly transfers to bank
+  transactions; generic anomaly detection or cybersecurity where financial crime
+  is only a motivating example.
+
+  Prefer work that is technically substantial and evaluated on realistic data, and
+  work whose ideas a small team at a European bank could actually use.
+
+# Broad recall net (case-insensitive substring match on title + abstract). Every
+# arXiv and RSS candidate must hit one of these to be screened at all, and
+# OpenAlex hits are annotated with them. Substring matching means short tokens
+# are dangerous: "aml" is left out because it matches "streamline", and bare
+# "illicit" because it matches illicit-drug papers.
+keywords:
+  - fraud
+  - launder                 # laundering, launderer
+  - scam
+  - mule                    # money mules
+  - financial crime
+  - financial-crime
+  - fincrime
+  - economic crime
+  - terrorist financing
+  - terrorism financing
+  - sanctions screening
+  - know your customer
+  - know-your-customer
+  - kyc
+  - transaction monitoring
+  - suspicious activit      # activity / activities
+  - suspicious transaction
+  - illicit financ          # finance, financial flows
+  - illicit fund
+  - authorised push payment
+  - authorized push payment
+  - account takeover
+  - identity theft
+  - synthetic identit       # identity / identities
+  - chargeback
+  - embezzle
+  - social engineering
+  - phishing
+
+# arXiv RSS includes cross-lists, so these catch most of the work. Measured: about
+# 41 "fraud", 12 "scam" and 9 "money laundering" abstracts a month, mostly primary
+# cs.LG, cs.AI, cs.CR and cs.CL, so roughly 60 a month through the keyword net.
+arxiv_categories:
+  - cs.LG
+  - cs.AI
+  - cs.CL
+  - cs.CR
+  - cs.SI
+  - cs.CY
+  - cs.CE
+  - cs.IR
+  - stat.ML
+  - stat.AP
+  - q-fin.RM
+  - q-fin.GN
+  - q-fin.CP
+  - q-fin.ST
+
+# All keyword-gated. The blogs are dense (most posts hit a keyword); the journals
+# are broad and their ScienceDirect feeds carry titles only, so they add the odd
+# paper rather than volume.
+#
+# Not here, on purpose:
+# - Journal of Money Laundering Control and Journal of Financial Crime (Emerald):
+#   no working RSS (403/404). They are in OpenAlex (S63393118, S180105601) but
+#   following a venue needs a new OpenAlex signal; see `venues` below.
+# - Monzo blog: its only feed (monzo.com/feed.xml) has two entries and no posts.
+# - Trade news (AML Intelligence, Finextra, The Paypers) and regulators (EBA,
+#   AMLA, FI, Riksbank, Finance Sweden): news and reports rather than papers, and
+#   the rubric below doesn't fit them. Worth a separate digest if wanted.
+feeds:
+  - name: "Feedzai blog"
+    url: "https://feedzai.com/feed/"
+    category: "blog"
+  - name: "Feedzai Techblog (Medium)"
+    url: "https://medium.com/feed/feedzaitech"
+    category: "blog"
+  - name: "BioCatch blog"
+    url: "https://www.biocatch.com/blog/rss.xml"
+    category: "blog"
+  - name: "Decision Support Systems (ScienceDirect)"
+    url: "https://rss.sciencedirect.com/publication/science/01679236"
+    category: "papers"
+  - name: "Computers & Security (ScienceDirect)"
+    url: "https://rss.sciencedirect.com/publication/science/01674048"
+    category: "papers"
+  - name: "Expert Systems with Applications (ScienceDirect)"
+    url: "https://rss.sciencedirect.com/publication/science/09574174"
+    category: "papers"
+  - name: "IEEE Transactions on Knowledge and Data Engineering"
+    url: "http://ieeexplore.ieee.org/rss/TOC69.XML"
+    category: "papers"
+
+openalex:
+  # No topic net. Every candidate topic (Benford's Law and Fraud Detection
+  # T13720, Crime/Illicit Activities T11838, Imbalanced Classification T11652,
+  # Cybercrime T12519, Anomaly Detection T11512, GNNs T11273) yields ~900-1,100
+  # works a month. Even keyword-gated it is ~600, and a sample was mostly Zenodo,
+  # Research Square and weak journals; the venue-quality drop only catches weak
+  # *journals*, not repositories. The two signals below are far more precise.
+  topics: []
+
+  # Citers of these surface ~15 papers a month, nearly all on topic.
+  seed_papers:
+    - W4306962648   # LaundroGraph: self-supervised graph learning for AML (Feedzai, 2022)
+    - W7133195726   # AMLworld: realistic synthetic transactions for AML (IBM/ETH, NeurIPS 2023)
+    - W4393159712   # Provably powerful GNNs for directed multigraphs (AML, 2024)
+    - W7133195757   # Turning the Tables: the Bank Account Fraud datasets (Feedzai, NeurIPS 2022)
+    - W4389880135   # SAML-D synthetic transaction monitoring dataset (2023)
+    - W4417057091   # Co-Investigator AI: agentic AI for AML compliance / STR drafting (2025)
+    # Considered and left out:
+    # - W2965374788  Elliptic Bitcoin GCN (2019): 82 citers in 3 months, mostly crypto/GNN generic
+    # - W3107975486  TimeSHAP (Feedzai, 2021): 27 citers in 3 months, generic XAI
+
+  # ~10 works in the last six months between them. IDs taken from the seed
+  # papers' authorships, so they are the right people.
+  monitored_authors:
+    - A5077752651   # Pedro Bizarro (Feedzai)
+    - A5039038824   # Pedro Saleiro (Feedzai Research)
+    - A5040828024   # Erik Altman (IBM Research, AMLworld)
+    - A5027902223   # Kubilay Atasu (IBM Research Zurich)
+    - A5024468524   # Jovan Blanuša (IBM Research Zurich)
+    - A5047536111   # Béni Egressy (ETH Zurich)
+
+  institutions: []
+
+  # PROPOSED, not yet supported by the code (ignored by the loader): follow
+  # every paper in these venues. Small (~100-150 papers a year each) and mostly
+  # legal/policy, so the rubric would reject most; worth it only if you want the
+  # regulatory angle.
+  # venues:
+  #   - S63393118    # Journal of Money Laundering Control
+  #   - S180105601   # Journal of Financial Crime
+
+# Rubric (REWORK_PLAN 1.3). For each statement the LLM writes a one-line
+# justification, then answers strongly disagree .. strongly agree (-2..+2), or
+# "can't tell" (0). Score = sum(weight * answer), computed in code.
+# Range with these weights: -36 .. +36. Disagreeing with a negative statement
+# adds to the score, so any technical, non-survey, non-crypto paper starts about
+# +8 up; that shifts all such papers equally, so it doesn't change their order.
+# A solid on-topic paper that isn't GenAI (fincrime +2, genai -2, realistic data,
+# novelty, production and transfer +1, survey, legal_policy and crypto_only -2)
+# scores ~+14.
+# `required`: answered "strongly disagree" rejects the paper outright.
+rubric:
+  - id: fincrime
+    statement: >-
+      The paper is about fraud, scams, money laundering or another kind of
+      financial crime: detecting, preventing, investigating or understanding it.
+    weight: 3
+    required: true
+
+  - id: genai
+    statement: >-
+      Generative AI (large language models, LLM agents or other generative
+      models) is central to the method, not a side component.
+    weight: 2
+
+  - id: investigation
+    statement: >-
+      It addresses how analysts or investigators work (alert triage, case
+      review, evidence gathering, drafting narratives or suspicious activity
+      reports), not only the detection model.
+    weight: 1.5
+
+  - id: realistic_data
+    statement: >-
+      It evaluates on realistic or large-scale data, such as real bank or
+      payment transactions or a substantial synthetic benchmark like AMLworld,
+      rather than a small toy or Kaggle-style dataset.
+    weight: 1.5
+
+  - id: novelty
+    statement: >-
+      It contributes a new method or a substantive new finding, rather than
+      applying standard models to a standard dataset.
+    weight: 1
+
+  - id: production
+    statement: >-
+      It tackles a problem that matters in production at a bank: scarce or
+      biased labels, drift, class imbalance, explainability or audit, latency,
+      or investigator cost.
+    weight: 1
+
+  - id: networks
+    statement: >-
+      It works with networks of accounts or entities: graph methods, entity
+      resolution or name matching, mule or laundering networks.
+    weight: 1
+
+  - id: transfer
+    statement: >-
+      Its methods could realistically be applied to fraud or AML problems at a
+      large European bank.
+    weight: 2
+
+  - id: survey
+    statement: >-
+      It is mainly a survey, review or position paper rather than new technical
+      work.
+    weight: -1
+
+  - id: legal_policy
+    statement: >-
+      It is mainly legal, regulatory, criminological or policy analysis, with
+      little or no data science.
+    weight: -2
+
+  - id: crypto_only
+    statement: >-
+      It is specific to cryptocurrency or blockchain, with no clear application
+      to bank or card transactions.
+    weight: -2
+
+# Points added in code for how a paper was found (REWORK_PLAN 1.3), on top of
+# the rubric. Citing a seed paper or being by a monitored author is strong
+# evidence the LLM can't see; +2 is worth one "agree" on `transfer`.
+signal_bonuses:
+  citation: 2
+  author: 2
+
+# Set from the seed backfill: the 100th-best seed paper's score (REWORK_PLAN 1.5).
+threshold: null

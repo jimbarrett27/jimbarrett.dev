@@ -1,5 +1,5 @@
 import { Component, computed, input, output, signal, ChangeDetectionStrategy } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { Decision, Paper } from '../../models/paper.model';
 
 type RoutingState = 'ok' | 'pending' | 'retrying' | 'failed';
@@ -19,11 +19,14 @@ interface RoutingBadge {
 @Component({
   selector: 'app-paper-card',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, DecimalPipe],
   template: `
     <article class="card" [class.focused]="focused()">
       <header class="card-head">
         <h2 class="title">{{ paper().title }}</h2>
+        @if (paper().llm_interest_score != null) {
+          <span class="score" title="Screening score">{{ paper().llm_interest_score | number: '1.0-1' }}</span>
+        }
       </header>
 
       <p class="meta">
@@ -135,6 +138,16 @@ interface RoutingBadge {
         font-size: 1.15rem;
         line-height: 1.35;
         margin: 0;
+      }
+
+      .score {
+        flex: none;
+        font-size: 0.8rem;
+        font-variant-numeric: tabular-nums;
+        color: var(--color-gray);
+        border: 1px solid var(--color-gray-light);
+        border-radius: 999px;
+        padding: 0.1rem 0.55rem;
       }
 
       .meta {
@@ -327,8 +340,9 @@ export class PaperCardComponent {
         filed: 'Filed',
         dismissed: 'Dismissed',
         auto_rejected: 'Auto-rejected',
+        archived: 'Archived',
         pending: 'Pending',
-      })[this.paper().status],
+      })[this.paper().status] ?? this.paper().status,
   );
 
   /**
@@ -391,7 +405,7 @@ export class PaperCardComponent {
   signalHint(signal: string): string {
     switch (signal) {
       case 'keyword':
-        return 'Matched a pharmacovigilance keyword';
+        return 'Matched a profile keyword';
       case 'topic':
         return 'Classified under a watched OpenAlex topic';
       case 'author':
