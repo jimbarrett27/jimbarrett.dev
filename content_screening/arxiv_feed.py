@@ -169,7 +169,17 @@ def fetch_arxiv_papers(
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 API_PAGE_SIZE = 200
 API_DELAY_SECONDS = 3.0  # arXiv asks for one request every three seconds
-API_RETRIES = 4
+# arXiv's API has bad patches of 500s and error entries lasting minutes, so
+# back off for up to ~8 minutes in all before giving up on a page.
+API_RETRIES = 8
+API_MAX_BACKOFF_SECONDS = 120.0
+
+
+def _backoff(attempt: int) -> float:
+    """Seconds to wait before attempt ``attempt`` (0-based)."""
+    if attempt == 0:
+        return API_DELAY_SECONDS
+    return min(API_MAX_BACKOFF_SECONDS, 5.0 * 2 ** attempt)
 
 
 def keyword_query(keywords: Iterable[str]) -> str:
@@ -198,7 +208,7 @@ def _api_page(query: str, start: int, session: requests.Session) -> dict:
         "sortBy": "submittedDate", "sortOrder": "ascending",
     }
     for attempt in range(API_RETRIES):
-        time.sleep(API_DELAY_SECONDS * (attempt + 1))
+        time.sleep(_backoff(attempt))
         try:
             response = session.get(ARXIV_API_URL, params=params, timeout=120)
             response.raise_for_status()

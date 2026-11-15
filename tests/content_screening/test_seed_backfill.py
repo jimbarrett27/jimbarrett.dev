@@ -157,3 +157,29 @@ class TestPromote:
         seed_backfill.promote(FINCRIME, top=1, apply=True)
         with pytest.raises(SystemExit):
             seed_backfill.promote(FINCRIME, top=1, apply=True)
+
+
+def test_rescreen_failed_fills_in_missing_answers(temp_db, monkeypatch):
+    with db_engine.get_session() as session:
+        session.add(_row(1, None))
+        session.add(_row(2, None))
+        session.add(_row(3, _answers("agree", "agree")))
+
+    calls = []
+
+    def fake_screen(article, profile):
+        calls.append((article.external_id, profile.threshold))
+        if article.external_id == "W2":  # still failing
+            return ScreeningResult(status="auto_rejected", score=None, reasoning="x")
+        return ScreeningResult(status="auto_rejected", score=4.0, reasoning="ok",
+                               tags=["t"], rubric_answers=_answers("agree", "neutral"))
+
+    monkeypatch.setattr(seed_backfill, "screen_article", fake_screen)
+    seed_backfill.rescreen_failed(FINCRIME)
+
+    assert sorted(calls) == [("W1", None), ("W2", None)]
+    with db_engine.get_session() as session:
+        rows = {r.external_id: (r.llm_interest_score, r.rubric_answers is not None, r.status)
+                for r in session.scalars(select(ArticleORM))}
+    assert rows["W1"] == (4.0, True, "auto_rejected")
+    assert rows["W2"] == (-99.0, False, "auto_rejected")
