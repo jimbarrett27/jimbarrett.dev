@@ -87,9 +87,9 @@ class TestRubricScreening:
         result = screener.screen_article(_article(surfaced_by=["citation"]), FINCRIME)
 
         # fincrime 3*2 + transfer 2*1, every other statement disagree (-1):
-        # positives -(2+1.5+1.5+1+1+1) = -8, negatives (survey -1, legal -2) +3,
-        # plus the citation bonus 2.
-        assert result.score == 6 + 2 - 8 + 3 + 2
+        # positives -(2+1.5+1.5+1+1+1) = -8, negatives (survey -1, legal -2,
+        # crypto -2) +5, plus the citation bonus 2.
+        assert result.score == 6 + 2 - 8 + 5 + 2
         assert result.status == "pending"
         assert result.reasoning == "A mule-detection paper."
         assert result.tags == ["aml"]
@@ -106,6 +106,8 @@ class TestRubricScreening:
     def test_required_statement_rejects(self, fake_llm):
         answers = _all("strongly_agree")
         answers["fincrime"]["answer"] = "strongly_disagree"
+        for negative in ("survey", "legal_policy", "crypto_only"):
+            answers[negative]["answer"] = "strongly_disagree"
         fake_llm.state["reply"] = json.dumps({"answers": answers})
         result = screener.screen_article(_article(), FINCRIME)
         assert result.score > FINCRIME.threshold

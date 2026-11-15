@@ -116,8 +116,8 @@ class TestIntake:
 
 
 def test_fincrime_weights_match_the_documented_range():
-    """The comment in fincrime.yaml quotes a -32..+32 range; keep it honest."""
+    """The comment in fincrime.yaml quotes a -36..+36 range; keep it honest."""
     fincrime = dataclasses.replace(load_profile("fincrime"), signal_bonuses={})
     best = {s.id: {"answer": "strongly_agree" if s.weight > 0 else "strongly_disagree"}
             for s in fincrime.rubric}
-    assert rubric.rubric_score(fincrime, best) == 32.0
+    assert rubric.rubric_score(fincrime, best) == 36.0

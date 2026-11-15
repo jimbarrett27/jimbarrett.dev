@@ -177,10 +177,12 @@ openalex:
 # Rubric (REWORK_PLAN 1.3). For each statement the LLM writes a one-line
 # justification, then answers strongly disagree .. strongly agree (-2..+2), or
 # "can't tell" (0). Score = sum(weight * answer), computed in code.
-# Range with these weights: -32 .. +32. Disagreeing with a negative statement
-# adds to the score, so any technical, non-survey paper starts about +6 up. A
-# solid on-topic paper that isn't GenAI (fincrime +2, genai -2, realistic data,
-# novelty, production and transfer +1, survey and legal_policy -2) scores ~+12.
+# Range with these weights: -36 .. +36. Disagreeing with a negative statement
+# adds to the score, so any technical, non-survey, non-crypto paper starts about
+# +8 up; that shifts all such papers equally, so it doesn't change their order.
+# A solid on-topic paper that isn't GenAI (fincrime +2, genai -2, realistic data,
+# novelty, production and transfer +1, survey, legal_policy and crypto_only -2)
+# scores ~+14.
 # `required`: answered "strongly disagree" rejects the paper outright.
 rubric:
   - id: fincrime
@@ -231,8 +233,8 @@ rubric:
 
   - id: transfer
     statement: >-
-      A GenAI data science team working on fraud and AML at a large European
-      bank could realistically use its ideas.
+      Its methods could realistically be applied to fraud or AML problems at a
+      large European bank.
     weight: 2
 
   - id: survey
@@ -245,6 +247,12 @@ rubric:
     statement: >-
       It is mainly legal, regulatory, criminological or policy analysis, with
       little or no data science.
+    weight: -2
+
+  - id: crypto_only
+    statement: >-
+      It is specific to cryptocurrency or blockchain, with no clear application
+      to bank or card transactions.
     weight: -2
 
 # Points added in code for how a paper was found (REWORK_PLAN 1.3), on top of
