@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Deploy origin/main to the home server: move the deploy checkout, rebuild the
-# triage UI that Caddy serves, and restart the services (including the gb_agent
-# user unit, if installed). See deploy/README.md.
+# triage UI that Caddy serves, and restart the services. See deploy/README.md.
 #
 # Everything lives in main(), so bash has parsed the whole script before the
 # checkout below rewrites this file underneath it.
@@ -46,12 +45,6 @@ main() {
     )
 
     sudo systemctl restart telegram-bot triage-backend
-    # The Pokemon agent is a user unit: no sudo. A restart resumes its series from
-    # the last kept step. Skipped if it isn't installed.
-    if systemctl --user cat gb-agent.service >/dev/null 2>&1; then
-        systemctl --user restart gb-agent
-        systemctl --user --no-pager status gb-agent | grep -E '^●|Active:'
-    fi
 
     systemctl --no-pager status telegram-bot triage-backend | grep -E '^●|Active:'
     git -C "$DEPLOY_DIR" log --oneline -1
