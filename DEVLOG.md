@@ -4,6 +4,19 @@ Decisions and milestones for this repo, newest first. One `### entry` per decisi
 milestone under a `## YYYY-MM-DD` date header — capture the *why*, not just the *what*.
 Maintained via the `/devlog` skill. (Format mirrors `SignalAgents/RESEARCH_LOG.md`.)
 
+## 2026-11-16
+
+### gb_agent retired
+
+After some days of autoplay the Qwen3.6-35B series had stalled and stopped making
+progress, so the experiment is over. The code, its tests, the `/gb-agent` page and the
+systemd units are removed (all recoverable from git history, last at `2b707b2`), along
+with `pyboy` and `langchain-deepseek`, which only it used. On the server the
+`gb-agent` units are gone, `llama-server` is stopped and disabled (unit and weights
+kept), and the sandbox image is deleted. The runs, ROMs and pokegold build stay
+in `/mnt/storage/data/gb_agent`, and the public bucket `personal-website-318015-gb-agent`
+is left as it was.
+
 ## 2026-10-25
 
 ### gb_agent describes the game state in every report (Silver, from pret/pokegold)

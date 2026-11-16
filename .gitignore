@@ -11,7 +11,3 @@ memes/recent_templates.json
 panel-preview/
 .ipynb_checkpoints/
 
-# gb_agent: ROMs are never committed
-gb_agent/roms/
-gb_agent/states/
-gb_agent/runs/

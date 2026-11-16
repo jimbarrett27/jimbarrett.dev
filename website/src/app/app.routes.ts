@@ -22,10 +22,6 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/tapestry/tapestry.component').then(m => m.TapestryComponent)
   },
   {
-    path: 'gb-agent',
-    loadComponent: () => import('./pages/gb-agent/gb-agent.component').then(m => m.GbAgentComponent)
-  },
-  {
     path: 'privacy',
     loadComponent: () => import('./pages/privacy/privacy.component').then(m => m.PrivacyComponent)
   },

@@ -1,7 +1,0 @@
-# The sandbox image's build context is gb_agent/. Only what the Dockerfile copies
-# gets in -- in particular never roms/.
-*
-!__init__.py
-!emulator/*.py
-!sandbox/image/runner.py
-!sandbox/image/Dockerfile
