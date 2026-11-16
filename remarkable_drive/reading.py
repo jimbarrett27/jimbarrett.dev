@@ -285,35 +285,9 @@ def _set_frontmatter(stub: str, key: str, value: str, after: str = "title") -> s
     return "---\n" + "\n".join(lines) + "\n---\n" + stub[match.end():]
 
 
-def _frontmatter_value(text: str, key: str) -> Optional[str]:
-    match = _FRONTMATTER.match(text)
-    if match is None:
-        return None
-    for line in match.group(1).split("\n"):
-        if line.startswith(f"{key}:"):
-            return line.split(":", 1)[1].strip().strip("'\"")
-    return None
-
-
 def find_stub(vault: Path, paper: ArticleORM) -> Optional[Path]:
     """The paper's stub: by ``triage_id``, then the recorded path, then URL."""
-    papers = vault / PAPERS_SUBDIR
-    stubs = sorted(papers.rglob("*.md")) if papers.exists() else []
-    texts = {}
-    for path in stubs:
-        try:
-            texts[path] = path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        if _frontmatter_value(texts[path], "triage_id") == str(paper.id):
-            return path
-    if paper.obsidian_path and (vault / paper.obsidian_path).exists():
-        return vault / paper.obsidian_path
-    if paper.url:
-        for path, text in texts.items():
-            if _frontmatter_value(text, "url") == paper.url:
-                return path
-    return None
+    return obsidian.find_stub(vault, paper, PAPERS_SUBDIR)
 
 
 def write_notes(vault: Path, paper: ArticleORM, block: str) -> Path:

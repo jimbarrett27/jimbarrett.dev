@@ -145,8 +145,7 @@ def _route_drive(paper: ArticleORM, settings: Settings) -> None:
     # A stub written on an earlier attempt (while Drive was failing) is in unread/.
     if paper.obsidian_path and settings.obsidian_vault:
         paper.obsidian_path = obsidian.move_to_paywalled(
-            Path(settings.obsidian_vault), paper.obsidian_path,
-            settings.obsidian_inbox_subdir)
+            Path(settings.obsidian_vault), paper, settings.obsidian_inbox_subdir)
 
 
 def _route_obsidian(paper: ArticleORM, settings: Settings) -> None:
@@ -155,9 +154,11 @@ def _route_obsidian(paper: ArticleORM, settings: Settings) -> None:
         return
 
     vault = Path(settings.obsidian_vault)
-    # Idempotency: if we've already written this paper's stub and it still
-    # exists, do nothing (safe to call repeatedly, e.g. from the retry loop).
-    if paper.obsidian_path and (vault / paper.obsidian_path).exists():
+    # Idempotency: if this paper already has a stub, wherever you've moved it,
+    # just record where it is (safe to call repeatedly, e.g. from the retry loop).
+    existing = obsidian.find_stub(vault, paper, settings.obsidian_inbox_subdir)
+    if existing is not None:
+        paper.obsidian_path = str(existing.relative_to(vault))
         return
 
     try:

@@ -85,7 +85,52 @@ def test_stub_written_earlier_moves_to_paywalled(monkeypatch, tmp_path):
     assert not list((tmp_path / "Papers" / "unread").iterdir())
 
 
-def test_move_to_paywalled_leaves_a_stub_you_already_moved(tmp_path):
-    assert obsidian.move_to_paywalled(tmp_path, "Papers/unread/gone.md", "Papers") \
-        == "Papers/unread/gone.md"
+def _settings(tmp_path):
+    return Settings(drive_enabled=True, obsidian_vault=str(tmp_path),
+                    obsidian_inbox_subdir="Papers")
+
+
+def _hand_move(tmp_path, rel, sub):
+    """Move a stub as you would in Obsidian; its new vault-relative path."""
+    dest = tmp_path / "Papers" / sub / Path(rel).name
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / rel).rename(dest)
+    return dest
+
+
+def test_move_to_paywalled_leaves_a_stub_you_already_filed(tmp_path):
+    paper = make_paper(id=7)
+    paper.obsidian_path = obsidian.write_stub(tmp_path, paper, "Papers")
+    moved = _hand_move(tmp_path, paper.obsidian_path, "read")
+    assert obsidian.move_to_paywalled(tmp_path, paper, "Papers") == "Papers/read/" + moved.name
+    assert moved.exists()
     assert not (tmp_path / "Papers" / "paywalled").exists()
+
+
+def test_move_to_paywalled_with_no_stub_keeps_the_recorded_path(tmp_path):
+    paper = make_paper(id=7, obsidian_path="Papers/unread/gone.md")
+    assert obsidian.move_to_paywalled(tmp_path, paper, "Papers") == "Papers/unread/gone.md"
+    assert not (tmp_path / "Papers" / "paywalled").exists()
+
+
+def test_stub_renamed_in_unread_still_moves_to_paywalled(monkeypatch, tmp_path):
+    # Found by triage_id even though the recorded path is stale.
+    paper = make_paper(id=7)
+    paper.obsidian_path = obsidian.write_stub(tmp_path, paper, "Papers")
+    (tmp_path / paper.obsidian_path).rename(tmp_path / "Papers" / "unread" / "renamed.md")
+    monkeypatch.setattr(routing.outbound, "send_to_tablet", lambda p: None)
+    routing.route_decision(paper, _settings(tmp_path))
+    assert paper.obsidian_path == "Papers/paywalled/renamed.md"
+    assert (tmp_path / paper.obsidian_path).exists()
+
+
+def test_no_duplicate_stub_after_you_move_it(monkeypatch, tmp_path):
+    monkeypatch.setattr(routing.outbound, "send_to_tablet", lambda p: "drive-1")
+    settings = _settings(tmp_path)
+    paper = make_paper(id=7)
+    routing.route_decision(paper, settings)
+    moved = _hand_move(tmp_path, paper.obsidian_path, "read")
+
+    routing.route_decision(paper, settings)  # e.g. the retry loop, for another target
+    assert paper.obsidian_path == "Papers/read/" + moved.name
+    assert list((tmp_path / "Papers").rglob("*.md")) == [moved]

@@ -158,8 +158,8 @@ def write_stub(
     """Write a new stub file and return its path relative to the vault root.
 
     Collisions (same date + slug) get a ``-2``, ``-3`` … suffix. This always
-    creates a fresh file; idempotency (skip if already written) is the caller's
-    responsibility via ``ArticleORM.obsidian_path``.
+    creates a fresh file; checking for an existing stub (:func:`find_stub`) is
+    the caller's job.
     """
     inbox = vault_root / inbox_subdir / (PAYWALLED_SUBDIR if paper.pdf_unavailable else UNREAD_SUBDIR)
     inbox.mkdir(parents=True, exist_ok=True)
@@ -180,21 +180,58 @@ def write_stub(
     return str(path.relative_to(vault_root))
 
 
-def move_to_paywalled(
-    vault_root: Path, rel_path: str, inbox_subdir: str = DEFAULT_INBOX_SUBDIR
-) -> str:
-    """Move a stub we wrote into ``paywalled/``; its new vault-relative path.
+_FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 
-    Only a stub still where we put it is moved: if it's gone (you've already moved
-    it yourself), it's left alone and the old path is returned.
+
+def frontmatter_value(text: str, key: str) -> Optional[str]:
+    """A top-level scalar from the stub's frontmatter, unquoted; None if absent."""
+    match = _FRONTMATTER.match(text)
+    if match is None:
+        return None
+    for line in match.group(1).split("\n"):
+        if line.startswith(f"{key}:"):
+            return line.split(":", 1)[1].strip().strip("'\"")
+    return None
+
+
+def find_stub(vault_root: Path, paper: ArticleORM, inbox_subdir: str) -> Optional[Path]:
+    """The paper's stub under ``inbox_subdir``, wherever you've moved it.
+
+    By ``triage_id``, then the path recorded on the paper, then URL (stubs
+    written before ``triage_id`` existed).
     """
-    src = vault_root / rel_path
-    if not src.exists():
-        return rel_path
-    dest_dir = vault_root / inbox_subdir / PAYWALLED_SUBDIR
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / src.name
-    if dest.exists():
-        return rel_path
-    src.rename(dest)
-    return str(dest.relative_to(vault_root))
+    root = vault_root / inbox_subdir
+    texts = {}
+    for path in sorted(root.rglob("*.md")) if root.exists() else []:
+        try:
+            texts[path] = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if frontmatter_value(texts[path], "triage_id") == str(paper.id):
+            return path
+    if paper.obsidian_path and (vault_root / paper.obsidian_path).exists():
+        return vault_root / paper.obsidian_path
+    if paper.url:
+        for path, text in texts.items():
+            if frontmatter_value(text, "url") == paper.url:
+                return path
+    return None
+
+
+def move_to_paywalled(
+    vault_root: Path, paper: ArticleORM, inbox_subdir: str = DEFAULT_INBOX_SUBDIR
+) -> Optional[str]:
+    """Move the paper's stub from ``unread/`` to ``paywalled/``; its vault-relative path.
+
+    The stub is found wherever it is (:func:`find_stub`), but only moved if it's
+    still in ``unread/``: one you've filed yourself stays put. Returns where the
+    stub now is, or the recorded path if there's no stub.
+    """
+    src = find_stub(vault_root, paper, inbox_subdir)
+    if src is None:
+        return paper.obsidian_path
+    dest = vault_root / inbox_subdir / PAYWALLED_SUBDIR / src.name
+    if src.parent == vault_root / inbox_subdir / UNREAD_SUBDIR and not dest.exists():
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        src = src.rename(dest)
+    return str(src.relative_to(vault_root))
