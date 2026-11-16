@@ -10,6 +10,8 @@ DEPLOY_DIR=/home/jim/deploy/jimbarrett.dev
 # Static triage UI, bind-mounted read-only into the Caddy container. Synced in
 # place rather than replaced, so the mount keeps pointing at the live files.
 TRIAGE_WEB_DIR=/home/jim/data/triage-web
+# The backend's EnvironmentFile; kept in step with triage/deploy/triage.env.
+TRIAGE_ENV=/etc/triage.env
 
 main() {
     git -C "$DEPLOY_DIR" fetch origin
@@ -43,6 +45,15 @@ main() {
             uv run alembic upgrade head
         fi
     )
+
+    # The tracked triage.env is the source of truth for /etc/triage.env, which the
+    # backend unit reads. Install it when they differ, showing what changes, so a
+    # setting committed to the repo can't silently miss the server.
+    local tracked_env="$DEPLOY_DIR/triage/deploy/triage.env"
+    if ! diff -u "$TRIAGE_ENV" "$tracked_env"; then
+        echo "Installing $tracked_env -> $TRIAGE_ENV"
+        sudo install -m 644 -o root -g root "$tracked_env" "$TRIAGE_ENV"
+    fi
 
     sudo systemctl restart telegram-bot triage-backend
 

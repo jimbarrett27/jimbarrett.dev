@@ -28,7 +28,7 @@ by a reboot rather than by any decision to deploy it.
 /home/jim/repos/jimbarrett.dev/deploy/deploy.sh
 ```
 
-[`deploy.sh`](deploy.sh) does five things:
+[`deploy.sh`](deploy.sh) does six things:
 
 1. Fetches and moves the deploy checkout to a detached `origin/main`.
 2. Runs `npm ci` and `ng build triage` in its `website/`.
@@ -38,7 +38,10 @@ by a reboot rather than by any decision to deploy it.
    `/home/jim/data/content_screening.db`, if any are pending, first copying the
    database to `content_screening.db.pre-migration`. New code's ORM expects the new
    columns, so this has to happen before the restart.
-5. Restarts `telegram-bot` and `triage-backend`. This asks for your sudo password.
+5. Installs `triage/deploy/triage.env` as `/etc/triage.env` if the two differ,
+   printing the diff first. The tracked copy is the source of truth, so a setting
+   that exists only in `/etc` is removed here; commit it to the repo instead.
+6. Restarts `telegram-bot` and `triage-backend`. This asks for your sudo password.
 
 Then check it came up, and confirm which commit is live:
 

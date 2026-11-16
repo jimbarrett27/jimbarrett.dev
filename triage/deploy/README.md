@@ -37,9 +37,9 @@ browser (on tailnet) ──https──▶ Caddy :443 ─┬─ /api/*  ──▶
 ## Deploying
 
 Run `deploy/deploy.sh` (see `deploy/README.md`). It moves the deploy checkout to
-`origin/main`, rebuilds the UI into `/home/jim/data/triage-web` and restarts the
-backend. Caddy needs no reload for a new UI build, because it serves straight from
-the mount.
+`origin/main`, rebuilds the UI into `/home/jim/data/triage-web`, installs
+`triage.env` as `/etc/triage.env` if it has changed, and restarts the backend.
+Caddy needs no reload for a new UI build, because it serves straight from the mount.
 
 ## First-time setup (already done; for rebuilding the box)
 
