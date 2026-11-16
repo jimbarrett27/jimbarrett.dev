@@ -1,7 +1,7 @@
 # Financial crime / fraud prevention, GenAI data science. The default profile.
 #
-# Until the seed backfill (REWORK_PLAN 1.5) sets `threshold`, the daily scan
-# screens and stores papers but queues none of them.
+# Papers scoring at least `threshold` go to the triage queue; the rest are
+# stored as auto_rejected with their rubric answers.
 #
 # Volumes below were measured on 2026-11-15 over the previous month. The goal is
 # narrow discovery: a few papers a day screened, not hundreds.
@@ -262,5 +262,8 @@ signal_bonuses:
   citation: 2
   author: 2
 
-# Set from the seed backfill: the 100th-best seed paper's score (REWORK_PLAN 1.5).
-threshold: null
+# Provisional, from the seed backfill on 2026-11-16 (REWORK_PLAN 1.5): 786
+# papers from Dec 2025 to Nov 2026 screened, and 102 of them scored >= 20 and
+# passed the required statement (about 2 a week). Revisit after a month of
+# real triage; lower it if good papers turn up below it.
+threshold: 20.0
