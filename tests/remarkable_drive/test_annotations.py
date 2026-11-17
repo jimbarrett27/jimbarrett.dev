@@ -141,3 +141,49 @@ def test_specks_join_the_nearest_mark():
                {"rect": fitz.Rect(200, 0, 230, 20)}]  # another note
     groups = ann.group(strokes)
     assert sorted(len(g) for g in groups) == [1, 3]
+
+
+# --- A reflowed paper ---------------------------------------------------------
+#
+# ``fixtures/reflowed_*.pdf``: two pages of a paper re-rendered at tablet size and
+# annotated on the tablet (2026-11-17). Page 1: a smart highlight over three lines and
+# "Much better margin!" written after a heading. Page 2: "Great work Claude! Let me know
+# if you read this!" in four handwritten lines below a list.
+
+
+@pytest.fixture(scope="module")
+def reflowed():
+    export = fitz.open(FIXTURES / "reflowed_export.pdf")
+    original = fitz.open(FIXTURES / "reflowed_original.pdf")
+    yield ann.read(export, original)
+    export.close()
+    original.close()
+
+
+def test_a_highlight_over_several_lines_covers_each_line(reflowed):
+    # The tablet stores it as one drawing with a rectangle per line.
+    (highlight,) = [m for m in reflowed.marks if m.kind == "highlight"]
+    assert highlight.text == ("continued pre-training on risk-control corpora injects domain "
+                              "knowledge, and task rewards jointly evaluate prediction "
+                              "correctness and reasoning quality.")
+
+
+def test_a_handwritten_note_is_one_mark_not_one_per_word(reflowed):
+    pens = [(m.page, m.anchor, m.text) for m in reflowed.marks if m.kind == "pen"]
+    assert pens == [(1, "beside", "1. Introduction"), (2, "beside", "cost savings.")]
+
+
+def test_separate_notes_side_by_side_stay_separate():
+    word = [{"rect": fitz.Rect(0, 0, 30, 20)}, {"rect": fitz.Rect(50, 0, 80, 20)}]
+    far = [{"rect": fitz.Rect(200, 0, 230, 20)}]  # another note, well along the line
+    below = [{"rect": fitz.Rect(0, 60, 30, 80)}]  # one further down the margin
+    groups = ann.group(word + far + below)
+    assert sorted(len(g) for g in groups) == [1, 1, 2]
+
+
+def test_browser_hyphens_are_healed_across_lines():
+    # (x0, y0, x1, y1, text, block, line, word), as get_text("words") gives them.
+    words = [(72, 90, 130, 102, "heteroge\u2010", 0, 0, 0),
+             (72, 104, 110, 116, "neous", 0, 1, 0), (114, 104, 140, 116, "data", 0, 1, 1)]
+    assert ann._in_rows(ann._rows(words)) == "heterogeneous data"
+    assert ann._join(words) == "heterogeneous data"
