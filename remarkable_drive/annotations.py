@@ -50,6 +50,12 @@ LOOP_MAX_TOUCHED = 0.6
 # A speck (a dot, the point of a "?") at most this big (pt) joins a mark up to this far away.
 SPECK_SIZE = 10.0
 SPECK_REACH = 20.0
+# Handwritten words on one line (overlapping by this share of the shorter one's
+# height) at most this far apart (pt), or lines stacked at most this far apart, are
+# one note.
+WORD_GAP = 30.0
+LINE_GAP = 15.0
+LINE_OVERLAP = 0.4
 # A horizontal gap wider than this (pt) between words on a baseline is a gutter.
 COLUMN_GAP = 12.0
 # Images shorter than this (pt) are inline glyphs or logos, not figures.
@@ -58,6 +64,9 @@ MIN_FIGURE_HEIGHT = 40.0
 BESIDE_MAX_LINES = 4
 # How far (pt) a note may sit from a figure and still be about it.
 FIGURE_REACH = 60.0
+
+# Line-end hyphens: ASCII, and the Unicode hyphen browsers print when they hyphenate.
+_HYPHENS = ("-", "\u2010")
 
 _CAPTION = re.compile(r"^\s*(fig\.?|figure|table)\s*\d+", re.IGNORECASE)
 
@@ -209,6 +218,28 @@ def _moved(drawing: dict, offset: fitz.Point) -> dict:
     return moved
 
 
+def _subpaths(drawing: dict) -> list[list[fitz.Point]]:
+    """The drawing's outline split where the path jumps.
+
+    One drawing can hold several shapes: a highlight over three lines of text is one
+    drawing with a rectangle per line. Joining them into one polygon fills the wrong
+    area, so each is filled on its own.
+    """
+    paths: list[list[fitz.Point]] = []
+    current: list[fitz.Point] = []
+    for item in drawing["items"]:
+        points = _points({"items": [item]})
+        if not points:
+            continue
+        if current and abs(current[-1] - points[0]) > 0.5:
+            paths.append(current)
+            current = []
+        current += points if not current else points[1:]
+    if current:
+        paths.append(current)
+    return paths
+
+
 def _rasterise(drawings: list[dict], rect: fitz.Rect) -> Image.Image:
     """A 1-bit-ish image of ``drawings`` over ``rect`` (black ink on white)."""
     width = max(1, int(rect.width * RASTER_SCALE) + 1)
@@ -216,13 +247,14 @@ def _rasterise(drawings: list[dict], rect: fitz.Rect) -> Image.Image:
     image = Image.new("L", (width, height), 255)
     draw = ImageDraw.Draw(image)
     for d in drawings:
-        pts = [((p.x - rect.x0) * RASTER_SCALE, (p.y - rect.y0) * RASTER_SCALE) for p in _points(d)]
-        if len(pts) < 2:
-            continue
-        if d.get("fill") is not None:
-            draw.polygon(pts, fill=0)
         line_width = max(1, int((d.get("width") or 0) * RASTER_SCALE))
-        draw.line(pts, fill=0, width=line_width)
+        for path in _subpaths(d):
+            pts = [((p.x - rect.x0) * RASTER_SCALE, (p.y - rect.y0) * RASTER_SCALE) for p in path]
+            if len(pts) < 2:
+                continue
+            if d.get("fill") is not None:
+                draw.polygon(pts, fill=0)
+            draw.line(pts, fill=0, width=line_width)
     return image
 
 
@@ -282,7 +314,7 @@ def _join(words: list[tuple]) -> str:
     for w in words:
         line = (w[5], w[6])
         if text:
-            if line != last_line and text.endswith("-"):
+            if line != last_line and text.endswith(_HYPHENS):
                 text = text[:-1]
             else:
                 text += " "
@@ -339,7 +371,39 @@ def group(drawings: list[dict], gap: float = GROUP_GAP) -> list[list[dict]]:
         if _distance(_bbox(nearest), _bbox(speck)) <= SPECK_REACH:
             nearest.extend(speck)
             marks.remove(speck)
+    marks = _join_handwriting(marks)
     return sorted(marks, key=lambda g: (_bbox(g).y0, _bbox(g).x0))
+
+
+def _same_note(a: fitz.Rect, b: fitz.Rect) -> bool:
+    """Whether two pieces of handwriting are words or lines of one note."""
+    dx = max(0.0, b.x0 - a.x1, a.x0 - b.x1)
+    dy = max(0.0, b.y0 - a.y1, a.y0 - b.y1)
+    side_by_side = min(a.y1, b.y1) - max(a.y0, b.y0) > LINE_OVERLAP * min(a.height, b.height)
+    stacked = min(a.x1, b.x1) - max(a.x0, b.x0) > 0
+    return (side_by_side and dx <= WORD_GAP) or (stacked and dy <= LINE_GAP)
+
+
+def _join_handwriting(marks: list[list[dict]]) -> list[list[dict]]:
+    """Merge the words of a note, and its lines, into one mark.
+
+    Strokes within :data:`GROUP_GAP` make a word, but the gaps between handwritten
+    words and lines are wider than that, and each mark is transcribed and written up
+    on its own.
+    """
+    marks = [list(m) for m in marks]
+    merged = True
+    while merged:
+        merged = False
+        for i in range(len(marks)):
+            for j in range(i + 1, len(marks)):
+                if _same_note(_bbox(marks[i]), _bbox(marks[j])):
+                    marks[i] += marks.pop(j)
+                    merged = True
+                    break
+            if merged:
+                break
+    return marks
 
 
 # --- 5. Anchoring -------------------------------------------------------------
@@ -368,7 +432,7 @@ def _in_rows(rows: list[tuple[fitz.Rect, list[tuple]]]) -> str:
     text = ""
     for _, ws in sorted(rows, key=lambda item: item[0].y0):
         line = " ".join(w[4] for w in sorted(ws, key=lambda w: w[0]))
-        if text.endswith("-"):
+        if text.endswith(_HYPHENS):
             text = text[:-1] + line
         else:
             text = f"{text} {line}" if text else line
