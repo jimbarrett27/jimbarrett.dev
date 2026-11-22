@@ -11,3 +11,6 @@ memes/recent_templates.json
 panel-preview/
 .ipynb_checkpoints/
 
+
+# Advent of Code puzzle inputs (not to be published)
+aoc_inputs/
