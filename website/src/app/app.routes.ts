@@ -22,6 +22,25 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/tapestry/tapestry.component').then(m => m.TapestryComponent)
   },
   {
+    // The overview stays mounted while a solution is open: the modal is a child
+    // route rendered in its <router-outlet>, so its URL can be shared.
+    path: 'puzzles',
+    loadComponent: () => import('./pages/puzzles/puzzles.component').then(m => m.PuzzlesComponent),
+    children: [
+      { path: '', children: [] },
+      {
+        path: 'aoc/:year/:day',
+        data: { kind: 'aoc' },
+        loadComponent: () => import('./pages/puzzles/solution-modal.component').then(m => m.SolutionModalComponent)
+      },
+      {
+        path: 'euler/:problem',
+        data: { kind: 'euler' },
+        loadComponent: () => import('./pages/puzzles/solution-modal.component').then(m => m.SolutionModalComponent)
+      }
+    ]
+  },
+  {
     path: 'privacy',
     loadComponent: () => import('./pages/privacy/privacy.component').then(m => m.PrivacyComponent)
   },

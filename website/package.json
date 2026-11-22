@@ -5,7 +5,7 @@
     "ng": "ng",
     "start": "ng serve website",
     "start:triage": "ng serve triage",
-    "prebuild": "node build-scripts/process-markdown.js",
+    "prebuild": "node build-scripts/process-markdown.js && node build-scripts/process-puzzles.js",
     "build": "ng build website",
     "build:triage": "ng build triage",
     "watch": "ng build website --watch --configuration development",

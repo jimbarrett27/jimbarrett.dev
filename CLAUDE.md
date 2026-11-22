@@ -17,6 +17,7 @@ Personal monorepo: a Python automation/bot codebase at the root, plus the
 | `triage/` | FastAPI backend for the paper-triage app; its UI is the separate `triage` Angular app in `website/projects/triage/` |
 | `tapestry/` | Daily news-tapestry generator; writes SVG panels to GCS, rendered by the tapestry page in `website/` |
 | `content_screening/` | Paper discovery/screening pipeline feeding `triage/` |
+| `advent_of_code/`, `project_euler/` | Puzzle solutions; exported to JSON at site build time by `website/build-scripts/process-puzzles.js`. AoC inputs live under `data_path("aoc_inputs")`, gitignored |
 | `llm/`, `agents/`, `gcp_util/`, `util/` | Shared helpers |
 
 ## Runtime data
@@ -56,5 +57,5 @@ land in one commit. Keep frontend reads of API fields defensive.
 ## Builds
 
 Cloud Build triggers are path-filtered to `website/**`, and the build steps `dir:` into
-`website/`. A change to the Python side does not deploy the site. A change to `website/projects/triage/`
+`website/`. A change to the Python side does not deploy the site, with one exception: the puzzles page is built from `advent_of_code/` and `project_euler/`, so those paths need adding to the trigger's included files (that filter is configured in GCP, not in the repo). A change to `website/projects/triage/`
 does trigger a site build, but the triage app isn't part of it.
