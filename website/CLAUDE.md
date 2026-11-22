@@ -39,6 +39,8 @@ Implication: **editing a `.md` file does nothing until the prebuild script runs.
 
 Advent of Code and Project Euler solutions are Python in the repo root (`../advent_of_code/yYYYY/day_NN.py`, `../project_euler/problem_NNN.py`). `prebuild` also runs `build-scripts/process-puzzles.js`, which writes `src/assets/puzzles/index.json` (years, days, stars; solved Euler problems) and one JSON per solution with its source. A part counts as solved when its function body is more than the template's `pass`. Euler problems above 100 are never exported: Project Euler only permits publishing the first hundred.
 
+The page is `pages/puzzles/`: the overview stays mounted and each solution opens as a modal on a child route (`/puzzles/aoc/:year/:day`, `/puzzles/euler/:problem`), so solutions are linkable. Links from the overview carry `{ fromOverview: true }` router state; the modal uses it to decide whether closing goes back in history or navigates to `/puzzles`.
+
 Unlike the blog JSON, this output is **gitignored**; it is wholly derived and rebuilt on every build. Same `ng serve` caveat: re-run the script to see changes.
 
 ## Routing & structure

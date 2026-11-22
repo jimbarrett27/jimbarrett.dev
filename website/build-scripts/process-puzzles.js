@@ -71,12 +71,32 @@ function isImplemented(lines, span) {
   return body.length > 0;
 }
 
-/** The first line of a module docstring, if the file opens with one. */
-function docstringTitle(source) {
-  const match = source.match(/^\s*("""|''')\s*([^\n]*?)\s*(\n|\1)/);
-  if (!match) return null;
-  const title = match[2].replace(/("""|''')$/, '').trim();
-  return title && !title.startsWith('<') ? title : null;
+/**
+ * Splits off a module docstring, if the file opens with one. Its first line is the
+ * title, any further paragraphs are a short write-up shown above the code, and the
+ * code is what follows it, with `lineOffset` the number of lines removed from the top
+ * (so function spans can be shifted to match).
+ */
+function splitDocstring(source) {
+  const match = source.match(/^\s*("""|''')([\s\S]*?)\1[^\n]*\n?/);
+  if (!match) return { title: null, description: null, code: source, lineOffset: 0 };
+
+  const [firstLine, ...rest] = match[2].trim().split('\n');
+  const title = firstLine.trim();
+  const description = rest.join('\n').trim();
+
+  let code = source.slice(match[0].length);
+  const leadingBlank = code.match(/^(\s*\n)*/)[0];
+  code = code.slice(leadingBlank.length);
+  const lineOffset = (match[0] + leadingBlank).split('\n').length - 1;
+
+  return {
+    // The template's placeholder docstring isn't a title.
+    title: title && !title.startsWith('<') ? title : null,
+    description: description || null,
+    code,
+    lineOffset,
+  };
 }
 
 function listFiles(dir, pattern) {
@@ -121,16 +141,22 @@ function exportAdventOfCode() {
       const stars = parts.filter((p) => p.solved).length;
       if (stars === 0) continue;
 
+      const { title, description, code, lineOffset } = splitDocstring(source);
       writeJson(`aoc/${year}/${String(day).padStart(2, '0')}.json`, {
         year,
         day,
-        title: docstringTitle(source),
+        title,
+        description,
         stars,
-        parts,
+        parts: parts.map((p) =>
+          p.startLine
+            ? { ...p, startLine: p.startLine - lineOffset, endLine: p.endLine - lineOffset }
+            : p,
+        ),
         problemUrl: `https://adventofcode.com/${year}/day/${day}`,
-        source,
+        source: code,
       });
-      solutions.push({ day, stars });
+      solutions.push({ day, stars, title });
     }
 
     if (solutions.length > 0) {
@@ -153,12 +179,13 @@ function exportProjectEuler() {
     const lines = source.split('\n');
     if (!isImplemented(lines, functionSpan(lines, 'solve'))) continue;
 
-    const title = docstringTitle(source);
+    const { title, description, code } = splitDocstring(source);
     writeJson(`euler/${String(problem).padStart(3, '0')}.json`, {
       problem,
       title,
+      description,
       problemUrl: `https://projecteuler.net/problem=${problem}`,
-      source,
+      source: code,
     });
     solved.push({ problem, title });
   }
