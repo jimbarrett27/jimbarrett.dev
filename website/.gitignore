@@ -41,3 +41,6 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Generated from ../advent_of_code and ../project_euler by build-scripts/process-puzzles.js
+/src/assets/puzzles

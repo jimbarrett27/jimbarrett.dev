@@ -21,6 +21,7 @@ npm run watch          # dev build in watch mode
 npm run lint           # ng lint (eslint) — CI gate, must be green before deploy
 npx ng test            # unit tests (Karma); note: components are scaffolded with skipTests, so coverage is sparse
 node build-scripts/process-markdown.js   # regenerate blog JSON without a full build
+node build-scripts/process-puzzles.js    # regenerate puzzle JSON (AoC + Euler) without a full build
 ```
 
 `build` is the production configuration by default (`defaultConfiguration: production` in angular.json), which applies bundle budgets and the environment file replacement. There is no separate lint config — eslint flat config lives in `eslint.config.js` (TS + Angular template rules; `app` selector prefix enforced).
@@ -33,6 +34,12 @@ Node is managed via **nvm**, so `npm`/`node`/`ng` are only on PATH inside an nvm
 Blog posts are **authored as markdown** in `content/blog/*.md(x)` with gray-matter frontmatter. They are **not** read at runtime. The `prebuild` npm hook runs `build-scripts/process-markdown.js`, which converts each post to `src/assets/blog/<slug>.json` (full HTML via `marked`, GFM on) plus an `index.json` summary sorted newest-first. The app fetches those JSON files at runtime via `core/services/blog.service.ts`.
 
 Implication: **editing a `.md` file does nothing until the prebuild script runs.** `npm run build` runs it automatically; for `ng serve` you must re-run `node build-scripts/process-markdown.js` (or restart) to see content changes.
+
+## Content pipeline (puzzles)
+
+Advent of Code and Project Euler solutions are Python in the repo root (`../advent_of_code/yYYYY/day_NN.py`, `../project_euler/problem_NNN.py`). `prebuild` also runs `build-scripts/process-puzzles.js`, which writes `src/assets/puzzles/index.json` (years, days, stars; solved Euler problems) and one JSON per solution with its source. A part counts as solved when its function body is more than the template's `pass`. Euler problems above 100 are never exported: Project Euler only permits publishing the first hundred.
+
+Unlike the blog JSON, this output is **gitignored**; it is wholly derived and rebuilt on every build. Same `ng serve` caveat: re-run the script to see changes.
 
 ## Routing & structure
 
