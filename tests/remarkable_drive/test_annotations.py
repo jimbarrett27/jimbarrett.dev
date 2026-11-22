@@ -14,6 +14,7 @@ import fitz
 import pytest
 
 from remarkable_drive import annotations as ann
+from remarkable_drive import outbound
 from remarkable_drive.outbound import COVER_MARKER
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -187,3 +188,46 @@ def test_browser_hyphens_are_healed_across_lines():
              (72, 104, 110, 116, "neous", 0, 1, 0), (114, 104, 140, 116, "data", 0, 1, 1)]
     assert ann._in_rows(ann._rows(words)) == "heterogeneous data"
     assert ann._join(words) == "heterogeneous data"
+
+
+# --- Page stamps --------------------------------------------------------------
+
+
+def _stamped_upload() -> fitz.Document:
+    """Cover, a page of text, and a page that is only a figure, stamped as uploaded."""
+    from tests.triage.test_obsidian import make_paper
+
+    src = fitz.open()
+    src.new_page().insert_text((72, 100), "Words on the first page", fontsize=11)
+    figure = src.new_page()
+    figure.draw_rect(fitz.Rect(100, 100, 400, 300), color=(0, 0, 0), width=1)
+    return fitz.open(stream=outbound.with_cover(make_paper(id=4), src.tobytes()),
+                     filetype="pdf")
+
+
+def test_a_page_with_no_words_is_matched_by_its_stamp():
+    original = _stamped_upload()
+    export = fitz.open()
+    export.insert_pdf(original)
+    blank = export.new_page()                        # one the reader inserted
+    blank.draw_line((50, 50), (200, 60), color=(0, 0, 0), width=2)
+    export.move_page(3, 2)                           # ...between pages 1 and 2
+
+    assert ann.map_pages(export, original) == [0, 1, None, 2]
+
+
+def test_ink_on_a_figure_page_is_a_mark_not_an_inserted_page():
+    original = _stamped_upload()
+    export = fitz.open()
+    export.insert_pdf(original)
+    export[2].draw_line((120, 320), (300, 330), color=(0, 0, 0), width=2)
+
+    result = ann.read(export, original)
+    assert result.inserted == [] and result.unmatched == []
+    assert [m.page for m in result.marks] == [2]
+
+
+def test_the_stamp_is_never_part_of_the_text():
+    original = _stamped_upload()
+    assert all(not w[4].startswith(outbound.PAGE_STAMP)
+               for page in original for w in ann._words(page))

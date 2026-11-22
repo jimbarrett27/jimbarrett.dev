@@ -131,6 +131,32 @@ def test_cover_ignores_malformed_rubric():
         assert "Rubric" not in doc[0].get_text()
 
 
+def test_cover_takes_the_size_of_the_paper():
+    tablet = fitz.Rect(0, 0, 445, 595)
+    doc = fitz.open()
+    doc.new_page(width=tablet.width, height=tablet.height).insert_text((72, 72), "Page one")
+    with fitz.open(stream=outbound.with_cover(make_paper(), doc.tobytes()), filetype="pdf") as out:
+        assert out[0].rect == tablet
+        text = out[0].get_text()
+        assert outbound.COVER_MARKER in text and make_paper().title in " ".join(text.split())
+        # Nothing on the cover sits under the tablet's menu at the left edge.
+        printed = [b for b in out[0].get_text("blocks") if outbound.PAGE_STAMP not in b[4]]
+        assert min(b[0] for b in printed) >= 14 * 72 / 25.4 - 1
+
+
+def test_every_page_gets_an_invisible_stamp():
+    doc = fitz.open()
+    doc.new_page()                       # a figure-only page: no text of its own
+    doc.new_page().insert_text((72, 72), "Some words")
+    with fitz.open(stream=outbound.with_cover(make_paper(id=9), doc.tobytes()),
+                   filetype="pdf") as out:
+        stamps = [[w[4] for w in page.get_text("words") if w[4].startswith("triage-page")]
+                  for page in out]
+        assert stamps == [["triage-page:9:0"], ["triage-page:9:1"], ["triage-page:9:2"]]
+        assert set(out[1].get_pixmap().samples) == {255}   # nothing visible
+        assert out[1].get_drawings() == []
+
+
 def test_with_cover_prepends_one_page():
     with fitz.open(stream=outbound.with_cover(make_paper(), _pdf(3)), filetype="pdf") as doc:
         assert doc.page_count == 4
@@ -163,6 +189,7 @@ def tablet(monkeypatch, tmp_path):
         return f"drive-{len(uploads)}"
     monkeypatch.setattr(outbound.drive, "upload_file", upload)
     monkeypatch.setattr(outbound, "fetch_pdf", lambda url: _pdf())
+    monkeypatch.setattr(outbound.reflow, "render", lambda url: None)
     return SimpleNamespace(folder=folder, uploads=uploads, data=tmp_path)
 
 
@@ -175,6 +202,50 @@ def test_send_uploads_with_cover_and_keeps_a_copy(tablet):
     assert (tablet.data / "papers" / "12.pdf").read_bytes() == data
     with fitz.open(stream=data, filetype="pdf") as doc:
         assert doc.page_count == 3
+
+
+def test_send_prefers_arxiv_html(tablet, monkeypatch):
+    html_pdf = fitz.open()
+    html_pdf.new_page(width=445, height=595).insert_text((72, 72), "From HTML")
+    urls = []
+    monkeypatch.setattr(outbound.reflow, "render",
+                        lambda url: urls.append(url) or html_pdf.tobytes())
+    monkeypatch.setattr(outbound, "fetch_pdf", lambda url: pytest.fail("fetched the PDF"))
+    outbound.send_to_tablet(make_paper(id=12, external_id="2401.00001v2"))
+
+    assert urls == ["https://arxiv.org/html/2401.00001v2"]
+    [(data, _, _)] = tablet.uploads
+    with fitz.open(stream=data, filetype="pdf") as doc:
+        assert doc.page_count == 2
+        assert "From HTML" in doc[1].get_text()
+        assert doc[0].rect == doc[1].rect
+
+
+def test_send_relays_the_pdf_when_theres_no_html(tablet):
+    outbound.send_to_tablet(make_paper(id=12))
+    [(data, _, _)] = tablet.uploads
+    with fitz.open(stream=data, filetype="pdf") as doc:
+        assert doc[0].rect.width == pytest.approx(157 * 72 / 25.4, abs=1)
+        assert all(page.rect == doc[0].rect for page in doc)
+        assert "Original page 2" in doc[-1].get_text()
+
+
+def test_send_falls_back_to_the_raw_pdf(tablet, monkeypatch):
+    def broken(url):
+        raise RuntimeError("browser crashed")
+    monkeypatch.setattr(outbound.reflow, "render", broken)
+    monkeypatch.setattr(outbound.columns, "relayout", broken)
+    outbound.send_to_tablet(make_paper(id=12))
+    [(data, _, _)] = tablet.uploads
+    with fitz.open(stream=data, filetype="pdf") as doc:
+        assert doc.page_count == 3 and doc[1].rect == outbound.A4 == doc[0].rect
+
+
+def test_non_arxiv_papers_skip_html(tablet, monkeypatch):
+    monkeypatch.setattr(outbound, "find_pdf_url", lambda paper: "https://x/p.pdf")
+    monkeypatch.setattr(outbound.reflow, "render", lambda url: pytest.fail("tried HTML"))
+    outbound.send_to_tablet(make_paper(source_type="openalex", doi="10.1/x"))
+    assert len(tablet.uploads) == 1
 
 
 def test_send_reuses_an_existing_upload(tablet):
