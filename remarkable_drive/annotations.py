@@ -5,9 +5,10 @@ page content alone and appends each stroke after the page's own drawings, so on 
 page that matches the original the ink is exactly the drawings past the original's
 count: no image work needed to separate it. The steps (REWORK_PLAN §2.4):
 
-1. **Map pages** by text layer: each export page whose words equal the next unmatched
-   original page's is that page. A page with no words that matches nothing is a page
-   you inserted. The cover page (:data:`remarkable_drive.outbound.COVER_MARKER`) is
+1. **Map pages** by the invisible page stamp outbound writes on each page (or, on
+   older uploads, by text layer: each export page whose words equal the next
+   unmatched original page's is that page). A page with no words or stamp that
+   matches nothing is a page you inserted. The cover page (:data:`remarkable_drive.outbound.COVER_MARKER`) is
    recognised so its ink becomes general remarks.
 2. **Separate the ink**: drawings beyond the original page's count.
 3. **Classify** by colour: black and grey are pen, anything else is the highlighter.
@@ -29,7 +30,7 @@ from typing import Optional
 import fitz
 from PIL import Image, ImageDraw
 
-from remarkable_drive.outbound import COVER_MARKER
+from remarkable_drive.outbound import COVER_MARKER, PAGE_STAMP
 
 # Pen strokes closer than this (pt) belong to the same mark.
 GROUP_GAP = 7.0
@@ -109,7 +110,16 @@ class Annotations:
 
 
 def _words(page: fitz.Page) -> list[tuple]:
-    return page.get_text("words")
+    """The page's printed words, without the upload's invisible page stamp."""
+    return [w for w in page.get_text("words") if not w[4].startswith(PAGE_STAMP)]
+
+
+def _stamp(page: fitz.Page) -> Optional[str]:
+    """The page stamp outbound writes on every uploaded page; None on older uploads."""
+    for w in page.get_text("words"):
+        if w[4].startswith(PAGE_STAMP):
+            return w[4]
+    return None
 
 
 def _key(words: list[tuple]) -> tuple[str, ...]:
@@ -123,19 +133,23 @@ def is_cover(page: fitz.Page) -> bool:
 def map_pages(export: fitz.Document, original: fitz.Document) -> list[Optional[int]]:
     """For each export page, the original page index it shows, or None (inserted/unknown).
 
-    Pages are matched in order: an export page matches the first original page at or
-    after the last match with the same words. Pages you insert don't break the order,
+    Pages are matched by their page stamp, or on uploads from before stamps, by their
+    words. Matching is in order: an export page matches the first original page at or
+    after the last match with the same key. Pages you insert don't break the order,
     and a single-page "current page" export matches wherever that page is.
     """
-    keys = [_key(_words(p)) for p in original]
+    def key(page: fitz.Page):
+        return _stamp(page) or _key(_words(page))
+
+    keys = [key(p) for p in original]
     mapping: list[Optional[int]] = []
     cursor = 0
     for page in export:
-        key = _key(_words(page))
+        key_ = key(page)
         match = None
-        if key:
+        if key_:
             for j in list(range(cursor, len(keys))) + list(range(0, cursor)):
-                if keys[j] == key:
+                if keys[j] == key_:
                     match = j
                     break
         mapping.append(match)
