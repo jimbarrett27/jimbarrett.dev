@@ -2,7 +2,7 @@
 title:  Random Samples from a Sphere
 description: ''
 pubDate: '26 Jul 2017'
-heroImage: '/blog-placeholder-3.jpg'
+heroImage: '/heroes/samples-from-a-sphere.png'
 ---
 
 During my work today, at some point I had to draw samples uniformly from a sphere, and made an observation I hadn't really appreciated before. The name of the game is to make sure that every infinitesimal shell has the same density of samples, on average.
