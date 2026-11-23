@@ -2,7 +2,7 @@
 title:  (un-)Predictability of Sports
 description: ''
 pubDate: '31 Dec 2017'
-heroImage: '/blog-placeholder-3.jpg'
+heroImage: '/heroes/unpredictability-of-sports.png'
 ---
 
 A subject of debate (mostly in the pub) over the last few months has been about the predictability of sports results. My hypothesis was that the total number of points scored in a team-vs-team sport should be roughly Poisson distributed, and as such you would expect greater statistical fluctuations in the scores of sports where the score-lines are typically low (e.g. football), compared to sports with a high scoreline (e.g. Basketball). My thinking was that the "better" team should win more consistently in high scoreline sports.

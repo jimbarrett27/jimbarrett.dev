@@ -2,7 +2,7 @@
 title:  It's Jim's life, but not as we know it!
 description: ''
 pubDate: '07 Jun 2016'
-heroImage: '/blog-placeholder-3.jpg'
+heroImage: '/heroes/its-jims-life.jpg'
 ---
 
 This morning I participated in the Astronomy and Astrophysics group Science Jamboree 2016, where I managed to win a prize (chocolates!) for the best talk. I'm not quite sure how I managed it, since in the midst of a series of informative and engaging talks, I performed a silly little poem;

@@ -2,7 +2,7 @@
 title:  New Paper - Accuracy of Inference
 description: ''
 pubDate: '04 Dec 2017'
-heroImage: '/blog-placeholder-3.jpg'
+heroImage: '/heroes/accuracy-of-inference.png'
 ---
 
 A couple of weeks ago I put my newest paper on to the arXiv, which you can find here; [https://arxiv.org/abs/1711.06287](https://arxiv.org/abs/1711.06287)

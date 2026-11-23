@@ -2,7 +2,7 @@
 title:  Gaussian Process Update Equations
 description: ''
 pubDate: '14 Jul 2017'
-heroImage: '/blog-placeholder-3.jpg'
+heroImage: '/heroes/gaussian-process-update-equations.png'
 ---
 
 When you start to learn about Gaussian processes, you come across the update equations fairly early on. The update equations are fairly intimidating to look at, and are typically dismissed as trivial to derive (for example, Rasmussen and Williams simply point you towards a statistics book from the 1930's, which is neither available online nor in our university library...). I had a go at the derivation, and promptly realised it wasn't trivial at all from a cold start.

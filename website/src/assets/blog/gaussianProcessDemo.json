@@ -4,6 +4,6 @@
   "description": "",
   "pubDate": "2020-11-09T00:00:00.000Z",
   "updatedDate": null,
-  "heroImage": "/blog-placeholder-3.jpg",
+  "heroImage": "/heroes/gaussian-process-demo.png",
   "content": "<p>I was recently asked to introduce my team to Gaussian processes. In my experience, Gaussian processes are often introduced in a very abstract manner, and it took me some time to understand exactly what was going on behind the scenes.</p>\n<p>As such, I prepared the following notebook which walks you through what is actually going on when you train a Gaussian process model. If you want to run or modify the notebook, you can download it <a href=\"/notebooks/gp_demo.ipynb\" download>here</a>.</p>\n<iframe src=\"/assets/notebooks/gp_demo.html\" onload='javascript:(function(o){o.style.height=o.contentWindow.document.body.scrollHeight+\"px\";}(this));' style=\"height:200px;width:100%;border:none;overflow:hidden;\"></iframe>\n"
 }
