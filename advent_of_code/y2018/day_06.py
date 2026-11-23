@@ -1,11 +1,6 @@
 from advent_of_code.input import get_input
 from collections import defaultdict, Counter
 
-def manhattan_distance(p1, p2):
-    xs = p1[0], p2[0]
-    ys = p1[1], p2[1]
-    return abs((max(xs)-min(xs)) + (max(ys)-min(ys)))
-
 def part_1():
 
     puzzle_input = get_input(2018, 6)

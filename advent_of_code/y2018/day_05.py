@@ -18,8 +18,6 @@ def get_reduced_length(polymer: str):
 
 def part_1():
 
-    puzzle_input = """dabAcCaCBAcCcaDA
-"""
     puzzle_input = get_input(2018, 5)
 
     polymer = puzzle_input.splitlines()[0]
@@ -28,8 +26,6 @@ def part_1():
 
 def part_2():
 
-    puzzle_input = """dabAcCaCBAcCcaDA
-"""
     puzzle_input = get_input(2018, 5)
 
     polymer = puzzle_input.splitlines()[0]
